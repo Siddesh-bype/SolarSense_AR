@@ -1,145 +1,153 @@
 package com.example.solarsense_ar
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.view.View
-import androidx.core.content.ContextCompat
-import com.google.ar.core.ArCoreApk
+import androidx.activity.ComponentActivity
 import com.google.ar.core.Config
+import com.google.ar.core.Frame
 import com.google.ar.core.Plane
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
-import com.google.ar.sceneform.ArSceneView
-import com.google.ar.sceneform.rendering.ModelRenderable
+import com.google.android.filament.gltfio.FilamentInstance
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.platform.PlatformView
+import io.github.sceneview.ar.ARSceneView
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.loaders.ModelLoader
+import io.github.sceneview.node.ModelNode
 
 /**
- * Wraps [ArSceneView] as a Flutter [PlatformView].
+ * Manages a real ARCore + SceneView 2.2.1 scene as a Flutter PlatformView.
  *
- * Key fix: call arSceneView.resume() inside init{} — because Flutter creates
- * the platform view AFTER Activity.onResume() has already fired, so the
- * onResume() lifecycle hook in MainActivity is too early to start the camera.
+ * API verified from bytecode (arsceneview-2.2.1.aar + sceneview-2.2.1.aar):
+ *   - ARSceneView(context, activity, lifecycle) — named params, rest defaulted
+ *   - sessionConfiguration = { session, config -> … }  (property setter)
+ *   - onSessionUpdated = { session, frame -> … }        (property setter)
+ *   - ModelLoader.loadModelInstanceAsync(fileLocation, onResult)
+ *   - AnchorNode(engine, anchor)
+ *   - ModelNode(modelInstance, scaleToUnits = 1.7f)
+ *   - Node.addChildNode(child)
  */
-class ARSceneManager(private val context: Context) : PlatformView {
+class ARSceneManager(
+    private val activity: ComponentActivity,
+) : PlatformView {
 
-    val arSceneView: ArSceneView = ArSceneView(context)
-    private val gridManager = PanelGridManager(arSceneView.scene)
+    private val arSceneView = ARSceneView(
+        context        = activity,
+        sharedActivity = activity,
+        sharedLifecycle = activity.lifecycle,
+    )
 
-    private var session: Session? = null
-    private var panelRenderable: ModelRenderable? = null
-    private var gridBuilt = false
-    private var currentNodes = emptyList<SolarPanelNode>()
+    private val modelLoader = ModelLoader(arSceneView.engine, activity)
 
-    var requestedPanelCount: Int = 12
+    private val anchorNodes   = mutableListOf<AnchorNode>()
+    private var currentPlane: Plane? = null
+
+    var eventSink: EventChannel.EventSink? = null
 
     init {
-        setupAR()
-        loadMaterial()
-        registerFrameListener()
-        // ← Critical: resume here so the camera feed starts immediately.
-        //   MainActivity.onResume() fires before the AndroidView is inflated,
-        //   so arSceneView.resume() was previously a no-op.
-        resume()
+        // sessionConfiguration is a property in 2.2.1 (not configureSession method)
+        arSceneView.sessionConfiguration = { _: Session, config: Config ->
+            config.depthMode           = Config.DepthMode.AUTOMATIC
+            config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+            config.planeFindingMode    = Config.PlaneFindingMode.HORIZONTAL
+        }
+
+        arSceneView.onSessionUpdated = { _: Session, frame: Frame ->
+            val tracked = frame
+                .getUpdatedTrackables(Plane::class.java)
+                .filter { p: Plane ->
+                    p.type == Plane.Type.HORIZONTAL_UPWARD_FACING
+                    && p.trackingState == TrackingState.TRACKING
+                    && p.subsumedBy == null
+                }
+                .maxByOrNull { p: Plane -> p.extentX * p.extentZ }
+
+            if (tracked != null) {
+                val newArea  = tracked.extentX * tracked.extentZ
+                val currArea = (currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)
+                if (currentPlane == null || newArea > currArea * 1.2f) {
+                    rebuildGrid(tracked)
+                }
+                streamHud()
+            }
+        }
     }
 
     override fun getView(): View = arSceneView
+    override fun dispose()       { clearNodes(); try { arSceneView.destroy() } catch (_: Exception) {} }
 
-    override fun dispose() {
-        try { arSceneView.destroy() } catch (_: Exception) {}
-        session?.close()
-        PanelMaterialFactory.invalidate()
-    }
+    // ── Grid ─────────────────────────────────────────────────────────────────
 
-    // ── AR Setup ──────────────────────────────────────────────────────────────
+    private fun rebuildGrid(plane: Plane, requestedCount: Int? = null) {
+        clearNodes()
+        currentPlane = plane
 
-    private fun setupAR() {
-        // Guard: camera permission must be granted before creating a Session
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            return // Flutter's camera permission dialog will handle this
-        }
-        try {
-            // Check ARCore is installed and supported on this device
-            val install = ArCoreApk.getInstance().requestInstall(
-                context as android.app.Activity, true
-            )
-            if (install == ArCoreApk.InstallStatus.INSTALL_REQUESTED) return
+        for (pos in PanelGridCalculator.calculate(plane, requestedCount)) {
+            try {
+                val anchor = plane.createAnchor(
+                    plane.centerPose.compose(
+                        com.google.ar.core.Pose.makeTranslation(pos.x, 0f, pos.z)
+                    )
+                )
 
-            val s = Session(context)
-            val config = Config(s).apply {
-                planeFindingMode    = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
-                lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
-                depthMode           = if (s.isDepthModeSupported(Config.DepthMode.AUTOMATIC))
-                                          Config.DepthMode.AUTOMATIC
-                                      else Config.DepthMode.DISABLED
-                updateMode          = Config.UpdateMode.LATEST_CAMERA_IMAGE
-            }
-            s.configure(config)
-            // Sceneform 1.23 — set session via property
-            arSceneView.session = s
-            session = s
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+                val anchorNode = AnchorNode(arSceneView.engine, anchor)
+                arSceneView.addChildNode(anchorNode)
+                anchorNodes += anchorNode
 
-    private fun loadMaterial() {
-        PanelMaterialFactory.build(context)
-            .thenAccept { r -> panelRenderable = r }
-            .exceptionally { null }
-    }
-
-    private fun registerFrameListener() {
-        arSceneView.scene.addOnUpdateListener {
-            val frame  = arSceneView.arFrame ?: return@addOnUpdateListener
-            if (frame.camera.trackingState != TrackingState.TRACKING) return@addOnUpdateListener
-
-            val renderable = panelRenderable ?: return@addOnUpdateListener
-            if (gridBuilt) return@addOnUpdateListener
-
-            val largestPlane = frame
-                .getUpdatedTrackables(Plane::class.java)
-                .filter {
-                    it.type  == Plane.Type.HORIZONTAL_UPWARD_FACING &&
-                    it.trackingState == TrackingState.TRACKING &&
-                    it.subsumedBy == null
+                modelLoader.loadModelInstanceAsync(
+                    fileLocation = "models/solar_panel.glb",
+                ) { instance: FilamentInstance? ->
+                    if (instance != null) {
+                        anchorNode.addChildNode(
+                            ModelNode(modelInstance = instance, scaleToUnits = 1.7f)
+                        )
+                    }
                 }
-                .maxByOrNull { it.extentX * it.extentZ }
-                ?: return@addOnUpdateListener
-
-            if (largestPlane.extentX < 1f || largestPlane.extentZ < 0.75f) return@addOnUpdateListener
-
-            val anchor = largestPlane.createAnchor(largestPlane.centerPose)
-            val result = gridManager.buildGrid(
-                plane          = largestPlane,
-                anchor         = anchor,
-                renderable     = renderable,
-                requestedCount = requestedPanelCount,
-            ) ?: return@addOnUpdateListener
-
-            currentNodes = result.nodes
-            gridBuilt    = true
+            } catch (e: Exception) { e.printStackTrace() }
         }
+    }
+
+    private fun clearNodes() {
+        anchorNodes.forEach { try { it.destroy() } catch (_: Exception) {} }
+        anchorNodes.clear()
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    fun resetGrid() {
-        currentNodes.forEach { it.setParent(null) }
-        currentNodes = emptyList()
-        gridBuilt    = false
+    fun addPanel() {
+        currentPlane?.let { rebuildGrid(it, (anchorNodes.size + 1).coerceAtMost(20)) }
     }
 
-    fun updateObstacleCount(count: Int) {
-        gridManager.updateObstacles(currentNodes, count)
+    fun removePanel() {
+        if (anchorNodes.size > 1) currentPlane?.let { rebuildGrid(it, anchorNodes.size - 1) }
     }
 
-    fun resume() {
-        try { arSceneView.resume() } catch (_: Exception) {}
+    fun resetScan() { clearNodes(); currentPlane = null }
+
+    fun getScanSnapshot(): Map<String, Any> {
+        val area = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
+        return mapOf(
+            "panelCount" to anchorNodes.size,
+            "systemKw"   to anchorNodes.size * 0.54,
+            "areaSqm"    to area,
+            "planeFound" to (currentPlane != null),
+        )
     }
 
-    fun pause() {
-        try { arSceneView.pause() } catch (_: Exception) {}
+    // ── HUD stream ────────────────────────────────────────────────────────────
+
+    private fun streamHud() {
+        val sink = eventSink ?: return
+        val area = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
+        try {
+            sink.success(mapOf(
+                "panelCount" to anchorNodes.size,
+                "maxPanels"  to PanelGridCalculator.maxPanelsFor(area.toFloat()),
+                "systemKw"   to anchorNodes.size * 0.54,
+                "areaSqm"    to area,
+                "planeFound" to (currentPlane != null),
+            ))
+        } catch (_: Exception) {}
     }
 }

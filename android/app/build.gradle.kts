@@ -7,7 +7,6 @@ plugins {
 android {
     namespace = "com.example.solarsense_ar"
     compileSdk = 36
-    // NDK version required by tflite_flutter, geolocator_android, webview_flutter_android etc.
     ndkVersion = "28.2.13676358"
 
     compileOptions {
@@ -21,7 +20,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.solarsense_ar"
-        minSdk = 26
+        minSdk = 26      // tflite_flutter requires 26; arsceneview needs >=24
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -32,6 +31,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // Required by ArSceneView — Filament material bundles must not be compressed
+    aaptOptions {
+        noCompress += listOf("filamat", "ktx")
+    }
 }
 
 flutter {
@@ -39,11 +43,9 @@ flutter {
 }
 
 dependencies {
-    // ARCore — real-world plane detection and tracking
-    implementation("com.google.ar:core:1.40.0")
-    // Sceneform community fork — Filament-based 3D rendering on ARCore planes
-    implementation("com.gorisse.thomas.sceneform:sceneform:1.23.0")
-    // ContextCompat.checkSelfPermission for camera guard
+    // ARSceneView 2.x — Kotlin-first SceneView/ARCore wrapper (successor to Gorisse Sceneform)
+    implementation("io.github.sceneview:arsceneview:2.2.1")
+    // AndroidX core for ContextCompat, lifecycle
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 }
-
