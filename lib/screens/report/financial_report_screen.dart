@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/enriched_scan_result.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:model_viewer_plus/model_viewer_plus.dart';
+import '../../widgets/solar_panel_3d.dart';
 
 class FinancialReportScreen extends StatelessWidget {
   const FinancialReportScreen({super.key});
@@ -99,24 +99,10 @@ class FinancialReportScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: 80,
-                  height: 80,
-                  child: ModelViewer(
-                    src: 'asset://assets/3d_solar_panel/10781_Solar-Panels_V1.glb',
-                    alt: 'Solar panel',
-                    autoRotate: true,
-                    autoRotateDelay: 0,
-                    rotationPerSecond: '30deg',
-                    cameraControls: false,
-                    disableZoom: true,
-                    shadowIntensity: 0,
-                    exposure: 1.2,
-                    backgroundColor: Colors.transparent,
-                  ),
-                ),
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: SolarPanel3DWidget(panelCount: 4, size: 80),
               )
             ],
           ),

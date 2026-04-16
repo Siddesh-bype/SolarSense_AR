@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:camera/camera.dart';
-import 'package:model_viewer_plus/model_viewer_plus.dart';
+import '../../widgets/solar_panel_3d.dart';
 import '../../main.dart';
 import '../../core/theme/app_colors.dart';
 
@@ -281,23 +281,10 @@ class _ARCameraScreenState extends State<ARCameraScreen> with SingleTickerProvid
           ),
         ),
 
-        // 3D Solar Panel Model
-        SizedBox(
-          width: 340,
-          height: 260,
-          child: ModelViewer(
-            src: 'asset://assets/3d_solar_panel/10781_Solar-Panels_V1.glb',
-            alt: 'Solar panel array on rooftop',
-            autoRotate: true,
-            autoRotateDelay: 0,
-            rotationPerSecond: '20deg',
-            cameraControls: true,
-            disableZoom: false,
-            shadowIntensity: 1,
-            shadowSoftness: 1,
-            exposure: 1.1,
-            backgroundColor: Colors.transparent,
-          ),
+        // 3D Solar Panel — pure Flutter, no WebView
+        SolarPanel3DWidget(
+          panelCount: _panelCount,
+          size: 300,
         ),
 
         // kW output label below the model
