@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/enriched_scan_response.dart';
 
 class ProviderSchemeScreen extends StatelessWidget {
   const ProviderSchemeScreen({super.key});
@@ -62,11 +63,8 @@ class ProviderSchemeScreen extends StatelessWidget {
               child: Text("Top Certified Providers", style: TextStyle(color: AppColors.navy, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
             ),
             
-            // Vendors List
-            _buildProviderCard("Tata Power Solar", "4.8", "Pan India", 145),
-            _buildProviderCard("Adani Solar", "4.6", "Pan India", 89),
-            _buildProviderCard("Luminous India", "4.5", "North Region", 230),
-            _buildProviderCard("Waaree Energies", "4.7", "West & South", 112),
+            // Brand cards — populated from EnrichedScanResponse if available
+            _buildDynamicBrandList(context),
           ],
         ),
       ),
@@ -74,7 +72,42 @@ class ProviderSchemeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProviderCard(String title, String rating, String region, int installs) {
+  /// Renders brand cards from route args (EnrichedScanResponse) or static fallback.
+  Widget _buildDynamicBrandList(BuildContext context) {
+    final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResponse?;
+    final brands = data?.brandRecommendations;
+
+    if (brands != null && brands.isNotEmpty) {
+      return Column(
+        children: brands.map((b) => _buildBrandCard(
+          title: b.displayName,
+          rating: b.rating.toStringAsFixed(1),
+          efficiency: '${b.bestEfficiencyPct}% efficiency',
+          priceRange: '₹${b.pricePerWattMin}–₹${b.pricePerWattMax}/W',
+          reason: b.reason,
+          rank: b.rank,
+        )).toList(),
+      );
+    }
+
+    // Static fallback when no data passed
+    return Column(
+      children: [
+        _buildBrandCard(title: 'Tata Power Solar', rating: '9.2', efficiency: '22.1% efficiency', priceRange: '₹29–₹34/W', reason: 'Trusted brand with widest service network.', rank: 1),
+        _buildBrandCard(title: 'Waaree Energies', rating: '8.8', efficiency: '22.0% efficiency', priceRange: '₹25–₹34/W', reason: "India's largest exporter — best value.", rank: 2),
+        _buildBrandCard(title: 'Loom Solar', rating: '8.3', efficiency: '21.8% efficiency', priceRange: '₹26–₹32/W', reason: 'D2C brand with transparent online pricing.', rank: 3),
+      ],
+    );
+  }
+
+  Widget _buildBrandCard({
+    required String title,
+    required String rating,
+    required String efficiency,
+    required String priceRange,
+    required String reason,
+    required int rank,
+  }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -84,7 +117,9 @@ class ProviderSchemeScreen extends StatelessWidget {
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-            child: const Center(child: Icon(Icons.solar_power, color: AppColors.primary)),
+            child: Center(
+              child: Text('#$rank', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -101,19 +136,15 @@ class ProviderSchemeScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     Container(width: 4, height: 4, decoration: const BoxDecoration(color: AppColors.border, shape: BoxShape.circle)),
                     const SizedBox(width: 8),
-                    Text(region, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(efficiency, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text(reason, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text("$installs+", style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
-              const Text("installs", style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-            ],
-          )
+          Text(priceRange, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 11)),
         ],
       ),
     );

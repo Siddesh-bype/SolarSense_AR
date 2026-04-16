@@ -2,6 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../models/enriched_scan_response.dart';
+import '../../services/api_service.dart';
+import '../../services/location_service.dart';
+
 class AnalysisLoadingScreen extends StatefulWidget {
   const AnalysisLoadingScreen({super.key});
 
@@ -9,38 +13,92 @@ class AnalysisLoadingScreen extends StatefulWidget {
   State<AnalysisLoadingScreen> createState() => _AnalysisLoadingScreenState();
 }
 
-class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen> with SingleTickerProviderStateMixin {
+class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   double _progress = 0;
   int _currentStep = 0;
 
   final List<Map<String, dynamic>> _steps = [
-    {"text": "Calculating energy generation...", "icon": Icons.check_circle, "color": Colors.white30},
-    {"text": "Analyzing shadows...", "icon": Icons.satellite_alt, "color": Colors.blueAccent},
-    {"text": "Computing PM Surya Ghar subsidy...", "icon": Icons.sync, "color": Colors.orangeAccent},
-    {"text": "Optimizing ROI projection...", "icon": Icons.pending, "color": Colors.white30},
+    {"text": "Fetching solar irradiance data...", "icon": Icons.wb_sunny, "color": Colors.orangeAccent},
+    {"text": "Calculating subsidy...", "icon": Icons.account_balance, "color": Colors.blueAccent},
+    {"text": "Finding best providers...", "icon": Icons.storefront, "color": Colors.greenAccent},
+    {"text": "Building your report...", "icon": Icons.check_circle, "color": Colors.white},
   ];
+
+  final _api = ApiService();
+  final _locationService = LocationService();
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
-    _simulateProgress();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 4))
+          ..repeat();
+    _runEnrichScan();
   }
 
-  void _simulateProgress() async {
-    for (int i = 0; i <= 100; i++) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      if (mounted) {
-        setState(() {
-          _progress = i / 100;
-          if (i == 30) _currentStep = 1;
-          if (i == 60) _currentStep = 2;
-          if (i == 85) _currentStep = 3;
-        });
-      }
+  Future<void> _runEnrichScan() async {
+    // ── Step 1: Get GPS location ──────────────────────────────────────────────
+    _setStep(0, 0.1);
+    final latLon = await _locationService.getCurrentLatLon();
+
+    // ── Step 2: Call /enrich-scan (handles PVGIS + subsidy + brands) ──────────
+    _setStep(1, 0.35);
+    EnrichedScanResponse? result;
+    String? errorMessage;
+
+    try {
+      result = await _api.enrichScan(
+        // Demo defaults — in production these come from ARCameraScreen via route args
+        totalArea: 50.0,
+        usableArea: 38.0,
+        panelCount: 12,
+        systemSizeKw: 3.0,
+        latitude: latLon.lat,
+        longitude: latLon.lon,
+        state: 'maharashtra', // TODO: pass from SetupScanScreen state selection
+        systemCostInr: 190000,
+        priceSensitivity: 'medium',
+      );
+    } catch (e) {
+      errorMessage = e.toString();
     }
-    if (mounted) Navigator.pushReplacementNamed(context, '/report');
+
+    // ── Step 3: Providers resolved ────────────────────────────────────────────
+    _setStep(2, 0.70);
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // ── Step 4: Building report ───────────────────────────────────────────────
+    _setStep(3, 0.90);
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    // Animate to 100%
+    for (int i = 91; i <= 100; i++) {
+      await Future.delayed(const Duration(milliseconds: 30));
+      if (mounted) setState(() => _progress = i / 100);
+    }
+
+    if (!mounted) return;
+
+    if (result != null) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/report',
+        arguments: result,
+      );
+    } else {
+      // Backend unreachable — navigate to report with null (screen shows placeholders)
+      Navigator.pushReplacementNamed(context, '/report', arguments: null);
+    }
+  }
+
+  void _setStep(int step, double progress) {
+    if (!mounted) return;
+    setState(() {
+      _currentStep = step;
+      _progress = progress;
+    });
   }
 
   @override

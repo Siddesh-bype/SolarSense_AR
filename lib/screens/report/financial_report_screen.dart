@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/enriched_scan_response.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class FinancialReportScreen extends StatelessWidget {
@@ -7,6 +8,9 @@ class FinancialReportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Receive the EnrichedScanResponse passed from analysis_loading_screen
+    final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResponse?;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your Solar Report'),
@@ -20,24 +24,24 @@ class FinancialReportScreen extends StatelessWidget {
           SingleChildScrollView(
             padding: EdgeInsets.only(
               left: 16, right: 16, top: 16, 
-              bottom: MediaQuery.of(context).padding.bottom + 140, // Space for sticky bottom bar
+              bottom: MediaQuery.of(context).padding.bottom + 140,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSummaryHero(context),
+                _buildSummaryHero(context, data),
                 const SizedBox(height: 24),
                 Text('Financial Summary', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 16),
-                _buildFinancialGrid(context),
+                _buildFinancialGrid(context, data),
                 const SizedBox(height: 24),
-                _buildMonthlySavingsCard(context),
+                _buildMonthlySavingsCard(context, data),
                 const SizedBox(height: 24),
-                _buildProjectionCard(context),
+                _buildProjectionCard(context, data),
                 const SizedBox(height: 24),
-                _buildEnvironmentalCard(context),
+                _buildEnvironmentalCard(context, data),
                 const SizedBox(height: 24),
-                _buildSubsidyCard(context),
+                _buildSubsidyCard(context, data),
               ],
             ),
           ),
@@ -47,7 +51,10 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryHero(BuildContext context) {
+  Widget _buildSummaryHero(BuildContext context, EnrichedScanResponse? data) {
+    final systemKw = data?.systemSizeKw ?? 4.8;
+    final annualKwh = data?.actualAnnualKwh ?? 6720.0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -65,15 +72,26 @@ class FinancialReportScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('System Size: 4.8 kW', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(
+                  'System Size: ${systemKw.toStringAsFixed(1)} kW',
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                const Text('Annual Generation: 6,720 kWh', style: TextStyle(color: Colors.white, fontSize: 16)),
+                Text(
+                  'Annual Generation: ${annualKwh.toStringAsFixed(0)} kWh',
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
                 const SizedBox(height: 16),
                 Row(
-                  children: const [
-                    Icon(Icons.location_on, color: Colors.white70, size: 16),
-                    SizedBox(width: 4),
-                    Text('Pune, MH • Generated Today', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.white70, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      data != null
+                          ? '${data.subsidy.stateDisplayName} • Live Data'
+                          : 'Pune, MH • Generated Today',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
                   ],
                 ),
               ],
@@ -93,7 +111,14 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFinancialGrid(BuildContext context) {
+  Widget _buildFinancialGrid(BuildContext context, EnrichedScanResponse? data) {
+    final grossCost = data?.subsidy.netCostInr != null
+        ? (data!.subsidy.netCostInr + data.subsidy.totalSubsidyInr)
+        : 240000.0;
+    final totalSubsidy = data?.subsidy.totalSubsidyInr ?? 78000;
+    final netCost = data?.subsidy.netCostInr ?? 162000.0;
+    final payback = data?.subsidy.paybackYears ?? 4.2;
+
     return GridView.count(
       crossAxisCount: 2,
       crossAxisSpacing: 12,
@@ -102,10 +127,10 @@ class FinancialReportScreen extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.5,
       children: [
-        _buildGridCard('Gross Cost', '₹2,40,000', AppColors.textPrimary),
-        _buildGridCard('Govt. Subsidy', '₹78,000', AppColors.success),
-        _buildGridCard('Net Cost', '₹1,62,000', AppColors.primary),
-        _buildGridCard('Payback', '4.2 years', AppColors.textPrimary),
+        _buildGridCard('Gross Cost', '₹${_fmt(grossCost.toInt())}', AppColors.textPrimary),
+        _buildGridCard('Govt. Subsidy', '₹${_fmt(totalSubsidy)}', AppColors.success),
+        _buildGridCard('Net Cost', '₹${_fmt(netCost.toInt())}', AppColors.primary),
+        _buildGridCard('Payback', '${payback.toStringAsFixed(1)} years', AppColors.textPrimary),
       ],
     );
   }
@@ -130,7 +155,11 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMonthlySavingsCard(BuildContext context) {
+  Widget _buildMonthlySavingsCard(BuildContext context, EnrichedScanResponse? data) {
+    final annualSavings = data?.subsidy.annualSavingsInr ?? 22200.0;
+    final monthlySavings = (annualSavings / 12).toInt();
+    final billBefore = monthlySavings + 1350; // estimated pre-solar bill
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -141,11 +170,11 @@ class FinancialReportScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Monthly Bill Savings: ₹1,850', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('Monthly Bill Savings: ₹$monthlySavings', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
-          _buildBarChartRow('Before', 3200, Colors.redAccent, 1.0),
+          _buildBarChartRow('Before', billBefore, Colors.redAccent, 1.0),
           const SizedBox(height: 16),
-          _buildBarChartRow('After', 1350, AppColors.success, 1350 / 3200),
+          _buildBarChartRow('After', 1350, AppColors.success, 1350 / billBefore),
         ],
       ),
     );
@@ -176,7 +205,16 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProjectionCard(BuildContext context) {
+  Widget _buildProjectionCard(BuildContext context, EnrichedScanResponse? data) {
+    final annualSavings = data?.subsidy.annualSavingsInr ?? 22200.0;
+    final savings25yr = (annualSavings * 25 / 100000); // in lakhs
+
+    // Build chart spots every 5 years
+    final spots = List.generate(6, (i) {
+      final yr = i * 5.0;
+      return FlSpot(yr, (annualSavings * yr / 100000));
+    });
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -189,7 +227,7 @@ class FinancialReportScreen extends StatelessWidget {
         children: [
           const Text('Total 25-Year Savings', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
           const SizedBox(height: 4),
-          const Text('₹5,55,000', style: TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.bold)),
+          Text('₹${savings25yr.toStringAsFixed(2)} Lakh', style: const TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
           SizedBox(
             height: 150,
@@ -214,14 +252,7 @@ class FinancialReportScreen extends StatelessWidget {
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 0),
-                      FlSpot(5, 1.1),
-                      FlSpot(10, 2.2),
-                      FlSpot(15, 3.3),
-                      FlSpot(20, 4.4),
-                      FlSpot(25, 5.55),
-                    ],
+                    spots: spots,
                     isCurved: true,
                     color: AppColors.primary,
                     barWidth: 3,
@@ -241,7 +272,12 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEnvironmentalCard(BuildContext context) {
+  Widget _buildEnvironmentalCard(BuildContext context, EnrichedScanResponse? data) {
+    // ~0.82 kg CO2 per kWh for India grid; annual kWh from scan
+    final annualKwh = data?.actualAnnualKwh ?? 4927.5;
+    final co2Tonnes = annualKwh * 0.000820;
+    final trees = (co2Tonnes * 16).toInt(); // ~16 trees per tonne
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -253,14 +289,17 @@ class FinancialReportScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.eco, color: AppColors.success),
-              SizedBox(width: 8),
-              Text('CO₂ Avoided: 4.5 tonnes/year', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+            children: [
+              const Icon(Icons.eco, color: AppColors.success),
+              const SizedBox(width: 8),
+              Text(
+                'CO₂ Avoided: ${co2Tonnes.toStringAsFixed(1)} tonnes/year',
+                style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          const Text('Equivalent to planting 72 trees annually', style: TextStyle(color: AppColors.textSecondary)),
+          Text('Equivalent to planting $trees trees annually', style: const TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -271,7 +310,13 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSubsidyCard(BuildContext context) {
+  Widget _buildSubsidyCard(BuildContext context, EnrichedScanResponse? data) {
+    final totalSubsidy = data?.subsidy.totalSubsidyInr ?? 78000;
+    final stateDisplay = data?.subsidy.stateDisplayName ?? 'Maharashtra';
+    final centralSubsidy = data?.subsidy.centralSubsidyInr ?? 78000;
+    final stateSubsidy = data?.subsidy.stateSubsidyInr ?? 0;
+    final portal = data?.subsidy.statePortal ?? 'pmsuryaghar.gov.in';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -293,9 +338,12 @@ class FinancialReportScreen extends StatelessWidget {
             child: const Text('PM Surya Ghar Yojana', style: TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(height: 12),
-          const Text('Eligible Subsidy: ₹78,000', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('Total Subsidy: ₹${_fmt(totalSubsidy)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          const Text('3 kW system — Central Govt. scheme', style: TextStyle(color: AppColors.textSecondary)),
+          Text(
+            'Central: ₹${_fmt(centralSubsidy)}${stateSubsidy > 0 ? ' + $stateDisplay: ₹${_fmt(stateSubsidy)}' : ''}',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 16),
           OutlinedButton(
             onPressed: () {},
@@ -313,9 +361,7 @@ class FinancialReportScreen extends StatelessWidget {
 
   Widget _buildStickyBottomBar(BuildContext context) {
     return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
+      bottom: 0, left: 0, right: 0,
       child: Container(
         padding: EdgeInsets.only(
           left: 16, right: 16, top: 16, 
@@ -342,5 +388,16 @@ class FinancialReportScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Format an integer with commas: 78000 → "78,000"
+  String _fmt(int value) {
+    final s = value.toString();
+    final result = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) result.write(',');
+      result.write(s[i]);
+    }
+    return result.toString();
   }
 }
