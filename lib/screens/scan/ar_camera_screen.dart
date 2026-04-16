@@ -1,6 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ── Channel constants ────────────────────────────────────────────────────────
@@ -82,13 +85,32 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
       body: Stack(
         children: [
 
-          // ── Layer 1: Real ARCore + SceneView (full screen, hardware) ──────
+          // ── Layer 1: ARSceneView via Hybrid Composition ───────────────────
+          // AndroidView uses Virtual Display which cannot render SurfaceView.
+          // PlatformViewLink + initSurfaceAndroidView uses Hybrid Composition:
+          // the native SurfaceView renders in its own hardware layer, composited
+          // on top of Flutter's layer tree — this is the correct approach for
+          // any GLSurfaceView / ARCore / SurfaceView-based native view.
           Positioned.fill(
-            child: AndroidView(
+            child: PlatformViewLink(
               viewType: _kViewType,
-              creationParamsCodec: const StandardMessageCodec(),
-              // Hybrid composition: the SurfaceView composites with Flutter's layer tree
-              gestureRecognizers: const {},
+              surfaceFactory: (context, controller) {
+                return AndroidViewSurface(
+                  controller: controller as AndroidViewController,
+                  hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+                  gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+                );
+              },
+              onCreatePlatformView: (params) {
+                return PlatformViewsService.initSurfaceAndroidView(
+                  id: params.id,
+                  viewType: _kViewType,
+                  layoutDirection: TextDirection.ltr,
+                  creationParamsCodec: const StandardMessageCodec(),
+                )
+                  ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+                  ..create();
+              },
             ),
           ),
 
