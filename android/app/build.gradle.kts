@@ -43,5 +43,7 @@ dependencies {
     implementation("com.google.ar:core:1.40.0")
     // Sceneform community fork — Filament-based 3D rendering on ARCore planes
     implementation("com.gorisse.thomas.sceneform:sceneform:1.23.0")
+    // ContextCompat.checkSelfPermission for camera guard
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 

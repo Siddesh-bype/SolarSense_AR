@@ -1,7 +1,10 @@
 package com.example.solarsense_ar
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.view.View
+import androidx.core.content.ContextCompat
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Plane
@@ -13,8 +16,10 @@ import io.flutter.plugin.platform.PlatformView
 
 /**
  * Wraps [ArSceneView] as a Flutter [PlatformView].
- * Configures ARCore session with depth + HDR lighting.
- * Detects the largest horizontal plane, then calls [PanelGridManager.buildGrid].
+ *
+ * Key fix: call arSceneView.resume() inside init{} — because Flutter creates
+ * the platform view AFTER Activity.onResume() has already fired, so the
+ * onResume() lifecycle hook in MainActivity is too early to start the camera.
  */
 class ARSceneManager(private val context: Context) : PlatformView {
 
@@ -32,12 +37,16 @@ class ARSceneManager(private val context: Context) : PlatformView {
         setupAR()
         loadMaterial()
         registerFrameListener()
+        // ← Critical: resume here so the camera feed starts immediately.
+        //   MainActivity.onResume() fires before the AndroidView is inflated,
+        //   so arSceneView.resume() was previously a no-op.
+        resume()
     }
 
     override fun getView(): View = arSceneView
 
     override fun dispose() {
-        arSceneView.destroy()
+        try { arSceneView.destroy() } catch (_: Exception) {}
         session?.close()
         PanelMaterialFactory.invalidate()
     }
@@ -45,9 +54,17 @@ class ARSceneManager(private val context: Context) : PlatformView {
     // ── AR Setup ──────────────────────────────────────────────────────────────
 
     private fun setupAR() {
+        // Guard: camera permission must be granted before creating a Session
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            return // Flutter's camera permission dialog will handle this
+        }
         try {
-            val availability = ArCoreApk.getInstance().checkAvailability(context)
-            if (!availability.isSupported) return
+            // Check ARCore is installed and supported on this device
+            val install = ArCoreApk.getInstance().requestInstall(
+                context as android.app.Activity, true
+            )
+            if (install == ArCoreApk.InstallStatus.INSTALL_REQUESTED) return
 
             val s = Session(context)
             val config = Config(s).apply {
@@ -59,6 +76,7 @@ class ARSceneManager(private val context: Context) : PlatformView {
                 updateMode          = Config.UpdateMode.LATEST_CAMERA_IMAGE
             }
             s.configure(config)
+            // Sceneform 1.23 — set session via property
             arSceneView.session = s
             session = s
         } catch (e: Exception) {
@@ -74,23 +92,22 @@ class ARSceneManager(private val context: Context) : PlatformView {
 
     private fun registerFrameListener() {
         arSceneView.scene.addOnUpdateListener {
-            val frame      = arSceneView.arFrame ?: return@addOnUpdateListener
-            val camera     = frame.camera
-            if (camera.trackingState != TrackingState.TRACKING) return@addOnUpdateListener
+            val frame  = arSceneView.arFrame ?: return@addOnUpdateListener
+            if (frame.camera.trackingState != TrackingState.TRACKING) return@addOnUpdateListener
 
             val renderable = panelRenderable ?: return@addOnUpdateListener
             if (gridBuilt) return@addOnUpdateListener
 
-            // getUpdatedTrackables is the correct ARCore API for Sceneform 1.23
             val largestPlane = frame
                 .getUpdatedTrackables(Plane::class.java)
-                .filter { it.type == Plane.Type.HORIZONTAL_UPWARD_FACING &&
-                          it.trackingState == TrackingState.TRACKING &&
-                          it.subsumedBy == null }
+                .filter {
+                    it.type  == Plane.Type.HORIZONTAL_UPWARD_FACING &&
+                    it.trackingState == TrackingState.TRACKING &&
+                    it.subsumedBy == null
+                }
                 .maxByOrNull { it.extentX * it.extentZ }
                 ?: return@addOnUpdateListener
 
-            // Require at least a 1m × 0.75m surface before building grid
             if (largestPlane.extentX < 1f || largestPlane.extentZ < 0.75f) return@addOnUpdateListener
 
             val anchor = largestPlane.createAnchor(largestPlane.centerPose)
@@ -118,6 +135,11 @@ class ARSceneManager(private val context: Context) : PlatformView {
         gridManager.updateObstacles(currentNodes, count)
     }
 
-    fun resume() { try { arSceneView.resume() } catch (_: Exception) {} }
-    fun pause()  { arSceneView.pause() }
+    fun resume() {
+        try { arSceneView.resume() } catch (_: Exception) {}
+    }
+
+    fun pause() {
+        try { arSceneView.pause() } catch (_: Exception) {}
+    }
 }
