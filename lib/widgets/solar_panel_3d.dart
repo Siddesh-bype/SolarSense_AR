@@ -1,8 +1,9 @@
 // lib/widgets/solar_panel_3d.dart
 //
-// Pure Flutter CustomPainter isometric solar panel array.
-// No WebView — works on all Android/iOS versions.
-// Animates auto-rotation via AnimationController.
+// Perspective-correct solar panel grid.
+// Panels are rendered as solid 3D boxes lying on the ground plane,
+// with a true vanishing-point perspective projection (not isometric).
+// Light shimmer animation simulates sunlight reflections.
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -10,11 +11,16 @@ import 'package:flutter/material.dart';
 class SolarPanel3DWidget extends StatefulWidget {
   final int panelCount;
   final double size;
+  // Gyroscope tilt offsets: shift the grid's vanishing point slightly
+  final double tiltX;  // lateral tilt (left/right phone)
+  final double tiltY;  // fore/aft tilt (phone facing down/up)
 
   const SolarPanel3DWidget({
     super.key,
     required this.panelCount,
     this.size = 300,
+    this.tiltX = 0,
+    this.tiltY = 0,
   });
 
   @override
@@ -23,245 +29,263 @@ class SolarPanel3DWidget extends StatefulWidget {
 
 class _SolarPanel3DWidgetState extends State<SolarPanel3DWidget>
     with SingleTickerProviderStateMixin {
-  late AnimationController _rotController;
+  late AnimationController _shimmer;
 
   @override
   void initState() {
     super.initState();
-    _rotController = AnimationController(
+    _shimmer = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 4),
     )..repeat();
   }
 
   @override
   void dispose() {
-    _rotController.dispose();
+    _shimmer.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _rotController,
+      animation: _shimmer,
       builder: (_, __) => CustomPaint(
-        size: Size(widget.size, widget.size * 0.75),
-        painter: _SolarArrayPainter(
+        size: Size(widget.size, widget.size * 0.65),
+        painter: _GroundPlanePainter(
           panelCount: widget.panelCount,
-          rotationAngle: _rotController.value * 2 * math.pi,
+          shimmer: _shimmer.value,
+          tiltX: widget.tiltX,
+          tiltY: widget.tiltY,
         ),
       ),
     );
   }
 }
 
-class _SolarArrayPainter extends CustomPainter {
+/// Renders an N-panel grid in vanishing-point perspective, lying flat on an
+/// implied ground plane. Each panel is a solid 3D box:
+///   top face  = navy-blue solar cell surface with 6×4 grid lines
+///   front face = darker side (visible thickness)
+class _GroundPlanePainter extends CustomPainter {
   final int panelCount;
-  final double rotationAngle;
+  final double shimmer;   // 0..1 animation value
+  final double tiltX;
+  final double tiltY;
 
-  const _SolarArrayPainter({
+  const _GroundPlanePainter({
     required this.panelCount,
-    required this.rotationAngle,
+    required this.shimmer,
+    required this.tiltX,
+    required this.tiltY,
   });
 
-  // ── Isometric helpers ──────────────────────────────────────────────────────
-  // Projects a 3D point (x, y, z) to 2D canvas using a slow-rotating
-  // isometric view. x=right, y=depth, z=up.
-  Offset _iso(double cx, double cy, double x, double y, double z) {
-    // Rotate around the z-axis slowly
-    final cos = math.cos(rotationAngle * 0.3);
-    final sin = math.sin(rotationAngle * 0.3);
-    final rx = x * cos - y * sin;
-    final ry = x * sin + y * cos;
+  // ── Perspective helpers ────────────────────────────────────────────────────
 
-    // Isometric projection
-    const scale = 1.0;
-    final px = (rx - ry) * scale * 0.866; // cos(30°)
-    final py = (rx + ry) * scale * 0.5 - z * 1.0; // sin(30°) and z lift
-
-    return Offset(cx + px, cy + py);
+  // Maps a 3D (x, z) coordinate on the ground plane to canvas 2D.
+  // x = left/right  z = depth (0=front, 1=back)
+  // vanishX/vanishY = vanishing point (horizon)
+  // groundY = y position of the foreground edge
+  Offset _project(double x, double z, double vanishX, double vanishY,
+      double groundY, double halfW) {
+    // Perspective lerp: as z→1 everything converges to the vanishing point
+    final t = math.pow(z, 0.55).toDouble(); // non-linear for stronger depth
+    final screenX = vanishX + x * halfW * (1 - t);
+    final screenY = groundY + (vanishY - groundY) * t;
+    return Offset(screenX, screenY);
   }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 1.6;
+    final W = size.width;
+    final H = size.height;
 
-    // Compute grid layout
-    final cols = panelCount < 4 ? panelCount : (panelCount / 2).ceil();
+    // Vanishing point: shifted by tilt, sits at ~15% from top
+    final vanishX = W / 2 + tiltX * 30;
+    final vanishY = H * 0.12 + tiltY * 20;
+    final groundY = H * 0.98; // foreground edge at bottom
+
+    // Grid layout
+    final cols = panelCount < 4 ? panelCount : (math.sqrt(panelCount) * 1.5).ceil().clamp(2, 6);
     final rows = (panelCount / cols).ceil();
 
-    final pw = 28.0; // panel width in 3D units
-    final pd = 18.0; // panel depth in 3D units
-    final gap = 4.0;
-    final th = 1.8; // panel thickness
+    // Cell spacing in "ground" units (0..1 space mapped to halfW)
+    final halfW = W * 0.46;
+    final cellW = 1.8 / cols;  // width of one cell in ground units
+    final cellD = 1.0 / rows;  // depth of one cell
+    // Panel thickness — visible as the front face
+    const thicknessZ = 0.04;
 
-    // Draw shadow ellipse first
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.25)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(cx, cy + 10),
-        width: cols * (pw + gap) * 1.4,
-        height: rows * (pd + gap) * 0.5,
-      ),
-      shadowPaint,
-    );
+    // Draw ground shadow first
+    _drawGroundShadow(canvas, W, H, vanishX, groundY);
 
-    // Mount frame (tilt bracket)
-    _drawMountFrame(canvas, cx, cy, cols, rows, pw, pd, gap);
-
-    // Draw panels back-to-front for correct z-order
-    for (int r = rows - 1; r >= 0; r--) {
-      for (int c = cols - 1; c >= 0; c--) {
-        final idx = r * cols + c;
+    // Draw panels back → front (painter's algorithm)
+    for (int row = rows - 1; row >= 0; row--) {
+      for (int col = 0; col < cols; col++) {
+        final idx = row * cols + col;
         if (idx >= panelCount) continue;
 
-        final ox = (c - cols / 2.0 + 0.5) * (pw + gap);
-        final oy = (r - rows / 2.0 + 0.5) * (pd + gap);
-        final oz = r * 3.0 + 4.0; // tilt elevation
+        // Normalised x position: -0.9..+0.9
+        final x0 = -0.9 + col * cellW;
+        final x1 = x0 + cellW * 0.92; // slight gap between panels
 
-        _drawPanel(canvas, cx, cy, ox, oy, oz, pw, pd, th);
+        // z positions: 0=front (near camera) 1=back (horizon)
+        // row 0 = front, row N = back
+        final z0 = (rows - 1 - row) / rows.toDouble();
+        final z1 = (rows - row) / rows.toDouble();
+
+        // 4 corners of the TOP FACE
+        final fl = _project(x0, z0, vanishX, vanishY, groundY, halfW); // front-left
+        final fr = _project(x1, z0, vanishX, vanishY, groundY, halfW); // front-right
+        final bl = _project(x0, z1, vanishX, vanishY, groundY, halfW); // back-left
+        final br = _project(x1, z1, vanishX, vanishY, groundY, halfW); // back-right
+
+        // Front face bottom (same x, z0 but shifted down by thickness)
+        final flBot = Offset(fl.dx, fl.dy + (groundY - vanishY) * thicknessZ * (1 - z0));
+        final frBot = Offset(fr.dx, fr.dy + (groundY - vanishY) * thicknessZ * (1 - z0));
+
+        _drawSinglePanel(
+          canvas, fl, fr, bl, br, flBot, frBot,
+          idx, shimmer,
+        );
       }
     }
+
+    // Mounting rails (two horizontal bars)
+    _drawRails(canvas, cols, rows, vanishX, vanishY, groundY, halfW, cellW, cellD);
   }
 
-  void _drawPanel(Canvas canvas, double cx, double cy,
-      double ox, double oy, double oz,
-      double pw, double pd, double th) {
-    // 8 vertices of the panel box
-    // Top face (solar cell side)
-    final tl = _iso(cx, cy, ox - pw / 2, oy + pd / 2, oz + th);
-    final tr = _iso(cx, cy, ox + pw / 2, oy + pd / 2, oz + th);
-    final br = _iso(cx, cy, ox + pw / 2, oy - pd / 2, oz + th);
-    final bl = _iso(cx, cy, ox - pw / 2, oy - pd / 2, oz + th);
-
-    // Bottom face
-    final tl0 = _iso(cx, cy, ox - pw / 2, oy + pd / 2, oz);
-    final tr0 = _iso(cx, cy, ox + pw / 2, oy + pd / 2, oz);
-    final br0 = _iso(cx, cy, ox + pw / 2, oy - pd / 2, oz);
-    final bl0 = _iso(cx, cy, ox - pw / 2, oy - pd / 2, oz);
-
-    // ── Front face (right-facing in iso) ───────────────────────────────────
+  void _drawSinglePanel(
+    Canvas canvas,
+    Offset fl, Offset fr, Offset bl, Offset br,
+    Offset flBot, Offset frBot,
+    int idx, double shimmer,
+  ) {
+    // ── Front face (visible thickness — this is what makes it look solid) ────
     final frontPath = Path()
-      ..moveTo(br.dx, br.dy)
-      ..lineTo(br0.dx, br0.dy)
-      ..lineTo(bl0.dx, bl0.dy)
-      ..lineTo(bl.dx, bl.dy)
+      ..moveTo(fl.dx, fl.dy)
+      ..lineTo(fr.dx, fr.dy)
+      ..lineTo(frBot.dx, frBot.dy)
+      ..lineTo(flBot.dx, flBot.dy)
       ..close();
+
     canvas.drawPath(
       frontPath,
-      Paint()..color = const Color(0xFF1A237E).withValues(alpha: 0.85),
+      Paint()..color = const Color(0xFF061035),
     );
 
-    // ── Right side face ────────────────────────────────────────────────────
-    final rightPath = Path()
-      ..moveTo(tr.dx, tr.dy)
-      ..lineTo(tr0.dx, tr0.dy)
-      ..lineTo(br0.dx, br0.dy)
-      ..lineTo(br.dx, br.dy)
-      ..close();
-    canvas.drawPath(
-      rightPath,
-      Paint()..color = const Color(0xFF0D47A1).withValues(alpha: 0.9),
-    );
-
-    // ── Top face (solar panel surface) ─────────────────────────────────────
+    // ── Top face (the solar panel surface) ───────────────────────────────────
     final topPath = Path()
-      ..moveTo(tl.dx, tl.dy)
-      ..lineTo(tr.dx, tr.dy)
+      ..moveTo(fl.dx, fl.dy)
+      ..lineTo(fr.dx, fr.dy)
       ..lineTo(br.dx, br.dy)
       ..lineTo(bl.dx, bl.dy)
       ..close();
 
-    // Base surface gradient simulation (darker at edges)
-    canvas.drawPath(
-      topPath,
-      Paint()..color = const Color(0xFF1565C0),
-    );
+    // Base navy blue fill
+    canvas.drawPath(topPath, Paint()..color = const Color(0xFF0D2060));
 
-    // Solar cell grid lines on top face
-    _drawCellGrid(canvas, tl, tr, br, bl);
+    // Shimmer band — moves across all panels together
+    final shimX = fl.dx + (fr.dx - fl.dx) * ((shimmer * 1.4 - 0.2).clamp(0.0, 1.0));
+    final shimW = (fr.dx - fl.dx) * 0.18;
+    if (shimX > fl.dx && shimX < fr.dx) {
+      final shimPath = Path()
+        ..moveTo(shimX, fl.dy)
+        ..lineTo(shimX + shimW, fr.dy)
+        ..lineTo(shimX + shimW, br.dy)
+        ..lineTo(shimX, bl.dy)
+        ..close();
+      canvas.drawPath(shimPath,
+          Paint()..color = Colors.white.withValues(alpha: 0.08));
+    }
 
-    // Frame border on top face
+    // Reflection highlight at top-left quadrant
+    final hlPath = Path()
+      ..moveTo(fl.dx, fl.dy)
+      ..lineTo(Offset.lerp(fl, fr, 0.28)!.dx, Offset.lerp(fl, fr, 0.28)!.dy)
+      ..lineTo(Offset.lerp(bl, br, 0.28)!.dx, Offset.lerp(bl, br, 0.28)!.dy)
+      ..lineTo(bl.dx, bl.dy)
+      ..close();
+    canvas.drawPath(hlPath,
+        Paint()..color = Colors.white.withValues(alpha: 0.07));
+
+    // ── Cell grid lines on top face ──────────────────────────────────────────
+    final gridPaint = Paint()
+      ..color = const Color(0xFF0A1850).withValues(alpha: 0.9)
+      ..strokeWidth = 0.5;
+
+    const gc = 6; // columns
+    const gr = 4; // rows
+    for (int i = 1; i < gc; i++) {
+      final t = i / gc;
+      canvas.drawLine(
+        Offset.lerp(fl, fr, t)!,
+        Offset.lerp(bl, br, t)!,
+        gridPaint,
+      );
+    }
+    for (int j = 1; j < gr; j++) {
+      final t = j / gr;
+      canvas.drawLine(
+        Offset.lerp(fl, bl, t)!,
+        Offset.lerp(fr, br, t)!,
+        gridPaint,
+      );
+    }
+
+    // ── Panel outline (aluminium frame) ──────────────────────────────────────
     canvas.drawPath(
       topPath,
       Paint()
-        ..color = const Color(0xFF90CAF9).withValues(alpha: 0.5)
+        ..color = const Color(0xFF4A7BC8).withValues(alpha: 0.6)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8,
+        ..strokeWidth = 0.9,
     );
-
-    // Highlight reflection streak
-    final hlPath = Path()
-      ..moveTo(tl.dx + (tr.dx - tl.dx) * 0.1, tl.dy + (tr.dy - tl.dy) * 0.1)
-      ..lineTo(tl.dx + (tr.dx - tl.dx) * 0.35, tl.dy + (tr.dy - tl.dy) * 0.35)
-      ..lineTo(bl.dx + (br.dx - bl.dx) * 0.35, bl.dy + (br.dy - bl.dy) * 0.35)
-      ..lineTo(bl.dx + (br.dx - bl.dx) * 0.1, bl.dy + (br.dy - bl.dy) * 0.1)
-      ..close();
-    canvas.drawPath(
-      hlPath,
-      Paint()..color = Colors.white.withValues(alpha: 0.12),
-    );
-
-    // Aluminium frame corners
-    _drawFrame(canvas, tl, tr, br, bl, tl0, tr0, br0, bl0);
   }
 
-  void _drawCellGrid(Canvas canvas, Offset tl, Offset tr, Offset br, Offset bl) {
-    const cols = 6;
-    const rows = 4;
-    final linePaint = Paint()
-      ..color = const Color(0xFF0D2B5E).withValues(alpha: 0.7)
-      ..strokeWidth = 0.4;
-
-    for (int i = 1; i < cols; i++) {
-      final t = i / cols;
-      final top = Offset.lerp(tl, tr, t)!;
-      final bot = Offset.lerp(bl, br, t)!;
-      canvas.drawLine(top, bot, linePaint);
-    }
-    for (int j = 1; j < rows; j++) {
-      final t = j / rows;
-      final left = Offset.lerp(tl, bl, t)!;
-      final right = Offset.lerp(tr, br, t)!;
-      canvas.drawLine(left, right, linePaint);
-    }
-  }
-
-  void _drawFrame(Canvas canvas,
-      Offset tl, Offset tr, Offset br, Offset bl,
-      Offset tl0, Offset tr0, Offset br0, Offset bl0) {
-    final framePaint = Paint()
-      ..color = const Color(0xFFB0BEC5)
+  void _drawRails(
+    Canvas canvas,
+    int cols,
+    int rows,
+    double vanishX,
+    double vanishY,
+    double groundY,
+    double halfW,
+    double cellW,
+    double cellD,
+  ) {
+    final railPaint = Paint()
+      ..color = const Color(0xFF607D8B).withValues(alpha: 0.6)
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
 
-    // Top edge verticals
-    canvas.drawLine(tr, tr0, framePaint);
-    canvas.drawLine(br, br0, framePaint);
-  }
-
-  void _drawMountFrame(Canvas canvas, double cx, double cy,
-      int cols, int rows, double pw, double pd, double gap) {
-    final mountPaint = Paint()
-      ..color = const Color(0xFF546E7A).withValues(alpha: 0.7)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    final totalW = cols * (pw + gap);
-    final totalD = rows * (pd + gap);
-
-    // Two horizontal rail lines
-    for (final frac in [0.25, 0.75]) {
-      final left = _iso(cx, cy, -totalW / 2, (-totalD / 2) + totalD * frac, 2.0);
-      final right = _iso(cx, cy, totalW / 2, (-totalD / 2) + totalD * frac, 2.0 + rows * 2.0);
-      canvas.drawLine(left, right, mountPaint);
+    // Two horizontal mounting rails at 33% and 67% depth
+    for (final zFrac in [0.33, 0.67]) {
+      final left  = _project(-0.9, zFrac, vanishX, vanishY, groundY, halfW);
+      final right = _project(0.9 + cellW, zFrac, vanishX, vanishY, groundY, halfW);
+      canvas.drawLine(left, right, railPaint);
     }
   }
 
+  void _drawGroundShadow(
+      Canvas canvas, double W, double H, double vanishX, double groundY) {
+    final rect = Rect.fromLTWH(W * 0.05, groundY - H * 0.04, W * 0.9, H * 0.06);
+    final shader = RadialGradient(
+      center: Alignment.topCenter,
+      radius: 1.0,
+      colors: [
+        Colors.black.withValues(alpha: 0.35),
+        Colors.transparent,
+      ],
+    ).createShader(rect);
+
+    canvas.drawRect(rect, Paint()..shader = shader);
+  }
+
   @override
-  bool shouldRepaint(_SolarArrayPainter old) =>
-      old.rotationAngle != rotationAngle || old.panelCount != panelCount;
+  bool shouldRepaint(_GroundPlanePainter old) =>
+      old.shimmer != shimmer     ||
+      old.panelCount != panelCount ||
+      old.tiltX != tiltX         ||
+      old.tiltY != tiltY;
 }
