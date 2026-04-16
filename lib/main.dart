@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import 'core/theme/app_theme.dart';
+import 'screens/splash/splash_screen.dart';
 
-import 'modules/ar_module/application/controllers/ar_controller.dart';
-import 'modules/home/home_screen.dart';
+// Placeholder imports for unused routes right now
+import 'package:camera/camera.dart';
+import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/auth/login_register_screen.dart';
+import 'screens/home/dashboard_screen.dart';
+import 'screens/scan/setup_scan_screen.dart';
+import 'screens/scan/ar_camera_screen.dart';
+import 'screens/scan/analysis_loading_screen.dart';
+import 'screens/report/financial_report_screen.dart';
+import 'screens/vendors/vendor_connect_screen.dart';
+import 'screens/vendors/provider_scheme_screen.dart';
+import 'screens/profile/profile_screen.dart';
 
-void main() {
+List<CameraDescription> globalCameras = [];
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.black,
-  ));
+  try {
+    globalCameras = await availableCameras();
+  } catch (e) {
+    debugPrint('No hardware cameras found: $e');
+  }
   runApp(const SolarSenseApp());
 }
 
@@ -23,22 +32,24 @@ class SolarSenseApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ARController(),
-      child: MaterialApp(
-        title: 'SolarSense AR',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark().copyWith(
-          textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFF00E5FF),
-            secondary: Color(0xFFFFD600),
-            surface: Color(0xFF0A0E1A),
-          ),
-          scaffoldBackgroundColor: const Color(0xFF0A0E1A),
-        ),
-        home: const HomeScreen(),
-      ),
+    return MaterialApp(
+      title: 'SolarSense AR',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/onboarding': (context) => const OnboardingScreen(),
+        '/auth': (context) => const LoginRegisterScreen(),
+        '/home': (context) => const DashboardScreen(),
+        '/scan/setup': (context) => const SetupScanScreen(),
+        '/scan/ar': (context) => const ARCameraScreen(),
+        '/scan/loading': (context) => const AnalysisLoadingScreen(),
+        '/report': (context) => const FinancialReportScreen(),
+        '/vendors': (context) => const VendorConnectScreen(),
+        '/providers': (context) => const ProviderSchemeScreen(),
+        '/profile': (context) => const ProfileScreen(),
+      },
     );
   }
 }
