@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
-import '../../models/enriched_scan_response.dart';
+import '../../models/enriched_scan_result.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class FinancialReportScreen extends StatelessWidget {
@@ -8,8 +8,8 @@ class FinancialReportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Receive the EnrichedScanResponse passed from analysis_loading_screen
-    final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResponse?;
+    // Receive EnrichedScanResult passed from analysis_loading_screen
+    final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResult?;
 
     return Scaffold(
       appBar: AppBar(
@@ -23,7 +23,7 @@ class FinancialReportScreen extends StatelessWidget {
         children: [
           SingleChildScrollView(
             padding: EdgeInsets.only(
-              left: 16, right: 16, top: 16, 
+              left: 16, right: 16, top: 16,
               bottom: MediaQuery.of(context).padding.bottom + 140,
             ),
             child: Column(
@@ -45,15 +45,18 @@ class FinancialReportScreen extends StatelessWidget {
               ],
             ),
           ),
-          _buildStickyBottomBar(context),
+          _buildStickyBottomBar(context, data),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryHero(BuildContext context, EnrichedScanResponse? data) {
-    final systemKw = data?.systemSizeKw ?? 4.8;
-    final annualKwh = data?.actualAnnualKwh ?? 6720.0;
+  Widget _buildSummaryHero(BuildContext context, EnrichedScanResult? data) {
+    final systemKw = data?.systemSizeKw ?? 3.0;
+    final annualKwh = data?.annualKwh ?? 4927.5;
+    final stateLabel = data != null
+        ? '${data.stateDisplayName} • ${data.pvgisFallback ? "Estimated Data" : "Live Data"}'
+        : 'Pune, MH • Generated Today';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -65,59 +68,80 @@ class FinancialReportScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'System Size: ${systemKw.toStringAsFixed(1)} kW',
-                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Annual Generation: ${annualKwh.toStringAsFixed(0)} kWh',
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                const SizedBox(height: 16),
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.location_on, color: Colors.white70, size: 16),
-                    const SizedBox(width: 4),
                     Text(
-                      data != null
-                          ? '${data.subsidy.stateDisplayName} • Live Data'
-                          : 'Pune, MH • Generated Today',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      'System Size: ${systemKw.toStringAsFixed(1)} kW',
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Annual Generation: ${annualKwh.toStringAsFixed(0)} kWh',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, color: Colors.white70, size: 16),
+                        const SizedBox(width: 4),
+                        Text(stateLabel, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  'https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&fit=crop&w=100&q=80',
+                  width: 60, height: 60, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.solar_power, color: Colors.white, size: 60),
+                ),
+              )
+            ],
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              'https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&fit=crop&w=100&q=80',
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-            ),
-          )
+          // PVGIS fallback disclaimer
+          if (data?.pvgisFallback == true) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.info_outline, color: Colors.white70, size: 14),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Solar data estimated (location service unavailable)',
+                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          ]
         ],
       ),
     );
   }
 
-  Widget _buildFinancialGrid(BuildContext context, EnrichedScanResponse? data) {
-    final grossCost = data?.subsidy.netCostInr != null
-        ? (data!.subsidy.netCostInr + data.subsidy.totalSubsidyInr)
-        : 240000.0;
-    final totalSubsidy = data?.subsidy.totalSubsidyInr ?? 78000;
-    final netCost = data?.subsidy.netCostInr ?? 162000.0;
-    final payback = data?.subsidy.paybackYears ?? 4.2;
+  Widget _buildFinancialGrid(BuildContext context, EnrichedScanResult? data) {
+    final grossCost = data?.estimatedCost ?? 225000;
+    final totalSubsidy = data?.totalSubsidy ?? 78000;
+    final netCost = data?.netCost ?? 147000;
+    final payback = data?.paybackYears ?? 4.2;
 
     return GridView.count(
       crossAxisCount: 2,
@@ -127,9 +151,9 @@ class FinancialReportScreen extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.5,
       children: [
-        _buildGridCard('Gross Cost', '₹${_fmt(grossCost.toInt())}', AppColors.textPrimary),
+        _buildGridCard('Gross Cost', '₹${_fmt(grossCost)}', AppColors.textPrimary),
         _buildGridCard('Govt. Subsidy', '₹${_fmt(totalSubsidy)}', AppColors.success),
-        _buildGridCard('Net Cost', '₹${_fmt(netCost.toInt())}', AppColors.primary),
+        _buildGridCard('Net Cost', '₹${_fmt(netCost)}', AppColors.primary),
         _buildGridCard('Payback', '${payback.toStringAsFixed(1)} years', AppColors.textPrimary),
       ],
     );
@@ -155,11 +179,11 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMonthlySavingsCard(BuildContext context, EnrichedScanResponse? data) {
-    final annualSavings = data?.subsidy.annualSavingsInr ?? 22200.0;
+  Widget _buildMonthlySavingsCard(BuildContext context, EnrichedScanResult? data) {
+    final annualSavings = data?.annualSavingsInr ?? 22200.0;
     final monthlySavings = (annualSavings / 12).toInt();
-    final billBefore = monthlySavings + 1350; // estimated pre-solar bill
-    
+    final billBefore = monthlySavings + 1350;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -189,7 +213,7 @@ class FinancialReportScreen extends StatelessWidget {
             children: [
               Container(height: 24, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(12))),
               FractionallySizedBox(
-                widthFactor: factor,
+                widthFactor: factor.clamp(0.05, 1.0),
                 child: Container(
                   height: 24,
                   decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
@@ -205,14 +229,13 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProjectionCard(BuildContext context, EnrichedScanResponse? data) {
-    final annualSavings = data?.subsidy.annualSavingsInr ?? 22200.0;
-    final savings25yr = (annualSavings * 25 / 100000); // in lakhs
+  Widget _buildProjectionCard(BuildContext context, EnrichedScanResult? data) {
+    final annualSavings = data?.annualSavingsInr ?? 22200.0;
+    final savings25yr = annualSavings * 25 / 100000;
 
-    // Build chart spots every 5 years
     final spots = List.generate(6, (i) {
       final yr = i * 5.0;
-      return FlSpot(yr, (annualSavings * yr / 100000));
+      return FlSpot(yr, annualSavings * yr / 100000);
     });
 
     return Container(
@@ -242,9 +265,7 @@ class FinancialReportScreen extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 22,
-                      getTitlesWidget: (value, meta) {
-                        return Text('Yr ${value.toInt()}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 10));
-                      },
+                      getTitlesWidget: (value, meta) => Text('Yr ${value.toInt()}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
                       interval: 5,
                     ),
                   ),
@@ -258,10 +279,7 @@ class FinancialReportScreen extends StatelessWidget {
                     barWidth: 3,
                     isStrokeCapRound: true,
                     dotData: FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: AppColors.primary.withOpacity(0.1),
-                    ),
+                    belowBarData: BarAreaData(show: true, color: AppColors.primary.withOpacity(0.1)),
                   ),
                 ],
               ),
@@ -272,11 +290,10 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEnvironmentalCard(BuildContext context, EnrichedScanResponse? data) {
-    // ~0.82 kg CO2 per kWh for India grid; annual kWh from scan
-    final annualKwh = data?.actualAnnualKwh ?? 4927.5;
+  Widget _buildEnvironmentalCard(BuildContext context, EnrichedScanResult? data) {
+    final annualKwh = data?.annualKwh ?? 4927.5;
     final co2Tonnes = annualKwh * 0.000820;
-    final trees = (co2Tonnes * 16).toInt(); // ~16 trees per tonne
+    final trees = (co2Tonnes * 16).toInt();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -310,12 +327,11 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSubsidyCard(BuildContext context, EnrichedScanResponse? data) {
-    final totalSubsidy = data?.subsidy.totalSubsidyInr ?? 78000;
-    final stateDisplay = data?.subsidy.stateDisplayName ?? 'Maharashtra';
-    final centralSubsidy = data?.subsidy.centralSubsidyInr ?? 78000;
-    final stateSubsidy = data?.subsidy.stateSubsidyInr ?? 0;
-    final portal = data?.subsidy.statePortal ?? 'pmsuryaghar.gov.in';
+  Widget _buildSubsidyCard(BuildContext context, EnrichedScanResult? data) {
+    final totalSubsidy = data?.totalSubsidy ?? 78000;
+    final stateDisplay = data?.stateDisplayName ?? 'Maharashtra';
+    final centralSubsidy = data?.centralSubsidy ?? 78000;
+    final stateSubsidy = data?.stateSubsidy ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -359,12 +375,12 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStickyBottomBar(BuildContext context) {
+  Widget _buildStickyBottomBar(BuildContext context, EnrichedScanResult? data) {
     return Positioned(
       bottom: 0, left: 0, right: 0,
       child: Container(
         padding: EdgeInsets.only(
-          left: 16, right: 16, top: 16, 
+          left: 16, right: 16, top: 16,
           bottom: MediaQuery.of(context).padding.bottom == 0 ? 16 : MediaQuery.of(context).padding.bottom,
         ),
         decoration: BoxDecoration(
@@ -380,7 +396,8 @@ class FinancialReportScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: () => Navigator.pushNamed(context, '/vendors'),
+              // Pass the brand list to the vendors screen via route args
+              onPressed: () => Navigator.pushNamed(context, '/vendors', arguments: data),
               style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.border), foregroundColor: AppColors.textPrimary),
               child: const Text('Find Solar Vendors Near Me'),
             ),
@@ -390,7 +407,6 @@ class FinancialReportScreen extends StatelessWidget {
     );
   }
 
-  /// Format an integer with commas: 78000 → "78,000"
   String _fmt(int value) {
     final s = value.toString();
     final result = StringBuffer();

@@ -1,0 +1,68 @@
+{
+  "maharashtra": {
+    "display_name": "Maharashtra",
+    "discom": "MSEDCL / BEST / MAHADISCOM",
+    "portal": "msedcl.in / mahadiscom.in",
+    "additional_subsidy_per_kw": 0,
+    "additional_subsidy_flat": 0,
+    "notes": "Net metering available. Check with MSEDCL for current scheme. State top-up varies by DISCOM.",
+    "net_metering": true,
+    "avg_tariff_per_unit": 8.5
+  },
+  "gujarat": {
+    "display_name": "Gujarat",
+    "discom": "GUVNL / DGVCL / MGVCL",
+    "portal": "guvnl.in",
+    "additional_subsidy_per_kw": 0,
+    "additional_subsidy_flat": 15000,
+    "additional_subsidy_min": 10000,
+    "additional_subsidy_max": 20000,
+    "notes": "One of best states for solar ROI. Flat additional subsidy range ₹10,000–₹20,000.",
+    "net_metering": true,
+    "avg_tariff_per_unit": 7.0
+  },
+  "karnataka": {
+    "display_name": "Karnataka",
+    "discom": "BESCOM / HESCOM / CESC",
+    "portal": "bescom.org",
+    "additional_subsidy_per_kw": 20000,
+    "additional_subsidy_flat": 0,
+    "max_kw_for_state_subsidy": 3,
+    "notes": "BESCOM empanelled vendors only. ₹20,000 per kW up to 3 kW.",
+    "net_metering": true,
+    "avg_tariff_per_unit": 8.0
+  },
+  "rajasthan": {
+    "display_name": "Rajasthan",
+    "discom": "JVVNL / AVVNL / JDVVNL",
+    "portal": "energy.rajasthan.gov.in",
+    "additional_subsidy_per_kw": 0,
+    "additional_subsidy_flat": 13500,
+    "additional_subsidy_min": 12000,
+    "additional_subsidy_max": 15000,
+    "notes": "High solar irradiance — excellent ROI. Flat range ₹12,000–₹15,000.",
+    "net_metering": true,
+    "avg_tariff_per_unit": 7.5
+  },
+  "tamil_nadu": {
+    "display_name": "Tamil Nadu",
+    "discom": "TANGEDCO",
+    "portal": "tangedco.gov.in",
+    "additional_subsidy_per_kw": 0,
+    "additional_subsidy_flat": 20000,
+    "max_kw_for_state_subsidy": 1,
+    "notes": "₹20,000 flat for 1 kW scheme. 4.5–5.5 kWh/m² irradiance.",
+    "net_metering": true,
+    "avg_tariff_per_unit": 7.0
+  },
+  "uttar_pradesh": {
+    "display_name": "Uttar Pradesh",
+    "discom": "UPPCL / DVVNL / MVVNL",
+    "portal": "upneda.org",
+    "additional_subsidy_per_kw": 0,
+    "additional_subsidy_flat": 30000,
+    "notes": "UPNEDA empanelled vendors. Up to ₹30,000 additional.",
+    "net_metering": true,
+    "avg_tariff_per_unit": 7.0
+  }
+}

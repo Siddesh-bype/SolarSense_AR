@@ -1,46 +1,42 @@
 // lib/services/location_service.dart
 //
-// Wraps geolocator with permission handling.
-// Falls back to Pune (18.5, 73.8) if permission is denied or GPS unavailable.
+// Returns device GPS coordinates.
+// Uses permission_handler to request permission, geolocator to get position.
+// Falls back to Pune (18.5204, 73.8567) on any failure or denial.
+// Timeout: 5 seconds, then fallback.
 
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class LatLon {
   final double lat;
   final double lon;
-
   const LatLon(this.lat, this.lon);
 }
 
-// Default fallback — Pune, Maharashtra
-const LatLon _kDefaultLocation = LatLon(18.5204, 73.8567);
+// Fallback: Pune, Maharashtra (central India solar belt)
+const LatLon _kPune = LatLon(18.5204, 73.8567);
+const Duration _kTimeout = Duration(seconds: 5);
 
 class LocationService {
-  /// Returns the device's current GPS coordinates.
-  /// Falls back to Pune if:
-  ///   - Location services are disabled
-  ///   - Permission is denied / denied forever
-  ///   - Any other error occurs
   Future<LatLon> getCurrentLatLon() async {
     try {
+      // 1. Request permission via permission_handler first
+      final status = await Permission.location.request();
+      if (!status.isGranted) return _kPune;
+
+      // 2. Check geolocator service
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return _kDefaultLocation;
+      if (!serviceEnabled) return _kPune;
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return _kDefaultLocation;
-      }
-      if (permission == LocationPermission.deniedForever) {
-        return _kDefaultLocation;
-      }
-
+      // 3. Get position with 5-second timeout
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
-      );
+      ).timeout(_kTimeout, onTimeout: () => throw Exception('GPS timeout'));
+
       return LatLon(position.latitude, position.longitude);
     } catch (_) {
-      return _kDefaultLocation;
+      return _kPune;
     }
   }
 }

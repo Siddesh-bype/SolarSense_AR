@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
-import '../../models/enriched_scan_response.dart';
+import '../../models/enriched_scan_result.dart';
 
 class ProviderSchemeScreen extends StatelessWidget {
   const ProviderSchemeScreen({super.key});
@@ -74,13 +74,13 @@ class ProviderSchemeScreen extends StatelessWidget {
 
   /// Renders brand cards from route args (EnrichedScanResponse) or static fallback.
   Widget _buildDynamicBrandList(BuildContext context) {
-    final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResponse?;
+    final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResult?;
     final brands = data?.brandRecommendations;
 
     if (brands != null && brands.isNotEmpty) {
       return Column(
         children: brands.map((b) => _buildBrandCard(
-          title: b.displayName,
+          title: b.name,
           rating: b.rating.toStringAsFixed(1),
           efficiency: '${b.bestEfficiencyPct}% efficiency',
           priceRange: '₹${b.pricePerWattMin}–₹${b.pricePerWattMax}/W',

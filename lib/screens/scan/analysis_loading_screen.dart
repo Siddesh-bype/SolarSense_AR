@@ -2,9 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../models/enriched_scan_response.dart';
-import '../../services/api_service.dart';
+import '../../models/enriched_scan_result.dart';
 import '../../services/location_service.dart';
+import '../../services/scan_orchestrator.dart';
 
 class AnalysisLoadingScreen extends StatefulWidget {
   const AnalysisLoadingScreen({super.key});
@@ -18,15 +18,17 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
   late AnimationController _controller;
   double _progress = 0;
   int _currentStep = 0;
+  bool _hasError = false;
 
   final List<Map<String, dynamic>> _steps = [
     {"text": "Fetching solar irradiance data...", "icon": Icons.wb_sunny, "color": Colors.orangeAccent},
-    {"text": "Calculating subsidy...", "icon": Icons.account_balance, "color": Colors.blueAccent},
-    {"text": "Finding best providers...", "icon": Icons.storefront, "color": Colors.greenAccent},
+    {"text": "Calculating government subsidies...", "icon": Icons.account_balance, "color": Colors.blueAccent},
+    {"text": "Finding best solar providers...", "icon": Icons.storefront, "color": Colors.greenAccent},
     {"text": "Building your report...", "icon": Icons.check_circle, "color": Colors.white},
   ];
 
-  final _api = ApiService();
+  // ── On-device services (no backend) ────────────────────────────────────────
+  final _orchestrator = ScanOrchestrator();
   final _locationService = LocationService();
 
   @override
@@ -35,61 +37,56 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
     _controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 4))
           ..repeat();
-    _runEnrichScan();
+    _runAnalysis();
   }
 
-  Future<void> _runEnrichScan() async {
-    // ── Step 1: Get GPS location ──────────────────────────────────────────────
-    _setStep(0, 0.1);
-    final latLon = await _locationService.getCurrentLatLon();
-
-    // ── Step 2: Call /enrich-scan (handles PVGIS + subsidy + brands) ──────────
-    _setStep(1, 0.35);
-    EnrichedScanResponse? result;
-    String? errorMessage;
+  Future<void> _runAnalysis() async {
+    setState(() { _hasError = false; });
 
     try {
-      result = await _api.enrichScan(
-        // Demo defaults — in production these come from ARCameraScreen via route args
-        totalArea: 50.0,
-        usableArea: 38.0,
+      // ── Step 1: Initialise services + get GPS location ─────────────────────
+      _setStep(0, 0.05);
+      await _orchestrator.init();
+      final latLon = await _locationService.getCurrentLatLon();
+      _setStep(0, 0.20);
+
+      // ── Step 2: PVGIS irradiance (concurrent with obstacle detection) ───────
+      // ScanOrchestrator runs PVGIS + obstacles concurrently internally.
+      // We update the step label before starting so the UI feels responsive.
+      _setStep(1, 0.35);
+
+      final EnrichedScanResult result = await _orchestrator.enrichScan(
+        lat: latLon.lat,
+        lon: latLon.lon,
+        // Demo defaults — in production pass from SetupScanScreen route args
+        systemKw: 3.0,
+        stateName: 'maharashtra',
+        totalAreaM2: 50.0,
+        usableAreaM2: 38.0,
         panelCount: 12,
-        systemSizeKw: 3.0,
-        latitude: latLon.lat,
-        longitude: latLon.lon,
-        state: 'maharashtra', // TODO: pass from SetupScanScreen state selection
-        systemCostInr: 190000,
-        priceSensitivity: 'medium',
+        avgTariff: 8.5, // ₹/kWh — Maharashtra average
+        priceSensitivity: 'mid',
+        cameraFrame: null, // TODO: pass camera frame from AR scan
       );
+
+      // ── Step 3: Subsidy + brands resolved (already done inside orchestrator) ─
+      _setStep(2, 0.70);
+      await Future.delayed(const Duration(milliseconds: 400));
+
+      // ── Step 4: Building report ───────────────────────────────────────────
+      _setStep(3, 0.88);
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Animate to 100 %
+      for (int i = 89; i <= 100; i++) {
+        await Future.delayed(const Duration(milliseconds: 25));
+        if (mounted) setState(() => _progress = i / 100);
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/report', arguments: result);
     } catch (e) {
-      errorMessage = e.toString();
-    }
-
-    // ── Step 3: Providers resolved ────────────────────────────────────────────
-    _setStep(2, 0.70);
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // ── Step 4: Building report ───────────────────────────────────────────────
-    _setStep(3, 0.90);
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    // Animate to 100%
-    for (int i = 91; i <= 100; i++) {
-      await Future.delayed(const Duration(milliseconds: 30));
-      if (mounted) setState(() => _progress = i / 100);
-    }
-
-    if (!mounted) return;
-
-    if (result != null) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/report',
-        arguments: result,
-      );
-    } else {
-      // Backend unreachable — navigate to report with null (screen shows placeholders)
-      Navigator.pushReplacementNamed(context, '/report', arguments: null);
+      if (mounted) setState(() => _hasError = true);
     }
   }
 
@@ -143,7 +140,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
 
                 Expanded(
                   child: Center(
-                    child: Column(
+                    child: _hasError ? _buildErrorView() : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Central Progress Visual
@@ -180,7 +177,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
                         ),
                         const SizedBox(height: 48),
 
-                        // Dynamic Status Narrative
+                        // Dynamic Status Labels
                         Column(
                           children: List.generate(_steps.length, (index) {
                             final isActive = index == _currentStep;
@@ -207,7 +204,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
                   ),
                 ),
 
-                // Bottom Dashboard Progress Bento Card
+                // Bottom Progress Bar + Info Card
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
                   child: Column(
@@ -224,7 +221,6 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // Contextual Bento Insight
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
@@ -254,6 +250,31 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
           )
         ],
       ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.error_outline, color: Colors.redAccent, size: 64),
+        const SizedBox(height: 16),
+        Text('Analysis failed', style: GoogleFonts.manrope(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text('Please check your connection and try again.', style: GoogleFonts.inter(fontSize: 14, color: Colors.white60), textAlign: TextAlign.center),
+        const SizedBox(height: 32),
+        ElevatedButton.icon(
+          onPressed: _runAnalysis,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        )
+      ],
     );
   }
 }
