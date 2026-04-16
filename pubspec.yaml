@@ -43,6 +43,7 @@ dependencies:
   permission_handler: ^11.0.0
   image: ^4.1.0
   tflite_flutter: ^0.10.4
+  model_viewer_plus: ^1.7.2
 
 dev_dependencies:
   flutter_test:
@@ -79,6 +80,7 @@ flutter:
     - assets/models/yolov8n.tflite
     - assets/data/solar_brands.json
     - assets/data/state_subsidies.json
+    - assets/3d_solar_panel/10781_Solar-Panels_V1.glb
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

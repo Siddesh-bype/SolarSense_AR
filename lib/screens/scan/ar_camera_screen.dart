@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:camera/camera.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
 import '../../main.dart';
 import '../../core/theme/app_colors.dart';
 
@@ -250,17 +251,74 @@ class _ARCameraScreenState extends State<ARCameraScreen> with SingleTickerProvid
     );
   }
 
+  /// Renders the real 3D solar panel GLB model overlaid on the camera feed.
+  /// The ModelViewer handles rotation, scaling, AR placement shadow internally.
   Widget _buildPanelGrid() {
-    return Transform(
-      transform: Matrix4.rotationX(0.7)..rotateZ(-0.2), alignment: Alignment.center,
-      child: Container(
-        width: 300, height: 150, padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: const Color(0xFFf97316).withValues(alpha: 0.1), border: Border.all(color: const Color(0xFFf97316).withValues(alpha: 0.8), width: 2), borderRadius: BorderRadius.circular(16)),
-        child: Wrap(
-          spacing: 8, runSpacing: 8,
-          children: List.generate(_panelCount, (index) => Container(width: 50, height: 30, decoration: BoxDecoration(color: Colors.blueGrey.shade800.withValues(alpha: 0.6), border: Border.all(color: Colors.blueGrey.shade400), borderRadius: BorderRadius.circular(2), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)]))),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Panel count badge above the 3D model
+        Positioned(
+          top: 0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFf97316).withValues(alpha: 0.8), width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.solar_power, color: Color(0xFFf97316), size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  '$_panelCount × 250W panels',
+                  style: GoogleFonts.manrope(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+
+        // 3D Solar Panel Model
+        SizedBox(
+          width: 340,
+          height: 260,
+          child: ModelViewer(
+            src: 'asset://assets/3d_solar_panel/10781_Solar-Panels_V1.glb',
+            alt: 'Solar panel array on rooftop',
+            autoRotate: true,
+            autoRotateDelay: 0,
+            rotationPerSecond: '20deg',
+            cameraControls: true,
+            disableZoom: false,
+            shadowIntensity: 1,
+            shadowSoftness: 1,
+            exposure: 1.1,
+            backgroundColor: Colors.transparent,
+          ),
+        ),
+
+        // kW output label below the model
+        Positioned(
+          bottom: 0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFf97316), Color(0xFF9d4300)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: const Color(0xFFf97316).withValues(alpha: 0.4), blurRadius: 12)],
+            ),
+            child: Text(
+              '${(_panelCount * 0.25).toStringAsFixed(1)} kW System',
+              style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

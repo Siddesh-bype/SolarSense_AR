@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/enriched_scan_result.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
 
 class FinancialReportScreen extends StatelessWidget {
   const FinancialReportScreen({super.key});
@@ -99,11 +100,22 @@ class FinancialReportScreen extends StatelessWidget {
                 ),
               ),
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  'https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&fit=crop&w=100&q=80',
-                  width: 60, height: 60, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.solar_power, color: Colors.white, size: 60),
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: ModelViewer(
+                    src: 'asset://assets/3d_solar_panel/10781_Solar-Panels_V1.glb',
+                    alt: 'Solar panel',
+                    autoRotate: true,
+                    autoRotateDelay: 0,
+                    rotationPerSecond: '30deg',
+                    cameraControls: false,
+                    disableZoom: true,
+                    shadowIntensity: 0,
+                    exposure: 1.2,
+                    backgroundColor: Colors.transparent,
+                  ),
                 ),
               )
             ],
