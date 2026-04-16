@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.solarsense.solar_sense_ar"
+    namespace = "com.example.solarsense_ar"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,10 +21,10 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.solarsense.solar_sense_ar"
+        applicationId = "com.example.solarsense_ar"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 24  // ARCore requires API 24+
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -32,6 +32,8 @@ android {
 
     buildTypes {
         release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -39,9 +41,4 @@ android {
 
 flutter {
     source = "../.."
-}
-
-dependencies {
-    // ARCore SDK (required by ar_flutter_plugin)
-    implementation("com.google.ar:core:1.41.0")
 }

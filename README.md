@@ -1,4 +1,4 @@
-# solar_sense_ar
+# solarsense_ar
 
 A new Flutter project.
 
