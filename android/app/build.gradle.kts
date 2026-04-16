@@ -32,9 +32,11 @@ android {
         }
     }
 
-    // Required by ArSceneView — Filament material bundles must not be compressed
+    // Required by Filament / SceneView — these files must NOT be compressed in APK.
+    // GLB/GLTF: Filament memory-maps them directly (mmap fails on compressed streams).
+    // filamat/ktx: Filament material bundles also require uncompressed access.
     aaptOptions {
-        noCompress += listOf("filamat", "ktx")
+        noCompress += listOf("filamat", "ktx", "glb", "gltf")
     }
 }
 
