@@ -1,185 +1,267 @@
 package com.example.solarsense_ar
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.opengl.GLSurfaceView
 import android.util.Log
 import android.view.View
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import com.google.ar.core.Anchor
+import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Plane
+import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
-import com.google.android.filament.gltfio.FilamentInstance
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.platform.PlatformView
-import io.github.sceneview.ar.ARSceneView
-import io.github.sceneview.ar.node.AnchorNode
-import io.github.sceneview.loaders.ModelLoader
-import io.github.sceneview.node.ModelNode
 
 /**
- * Real ARCore session via SceneView 2.2.1 as a Flutter Hybrid Composition PlatformView.
+ * Pure ARCore + GLSurfaceView — no Filament, no SceneView dependency.
+ * Completely avoids the Impeller/Filament Vulkan conflict.
  *
- * Important lifecycle note:
- *   ARSceneView creates the ARCore Session after the view is attached to
- *   the window. We set onSessionUpdated inside the onSessionCreated callback
- *   to ensure the session already exists when we hook its frame listener.
- *
- * Model loading:
- *   loadModelInstanceAsync returns FilamentInstance? (nullable).
- *   ModelNode(instance, scaleToUnits = 1.7f) wraps it into a visible node.
+ * Init sequence:
+ *  1. GLSurfaceView surface created → onSurfaceCreated fires on GL thread
+ *  2. Renderer calls back → main thread checks/requests camera permission
+ *  3. Permission granted → createSession() called
+ *  4. Session configured and resumed, texture bound to OES texture
+ *  5. onDrawFrame runs per-frame, ARCore planes detected, panels placed
  */
 class ARSceneManager(
     private val activity: ComponentActivity,
-) : PlatformView {
+    private val cameraPermLauncher: ActivityResultLauncher<String>,
+) : PlatformView, DefaultLifecycleObserver {
 
     companion object {
         private const val TAG = "SolarSenseAR"
     }
 
-    private val arSceneView = ARSceneView(
-        context         = activity,
-        sharedActivity  = activity,
-        sharedLifecycle = activity.lifecycle,
-    )
+    private val rootView      = FrameLayout(activity)
+    private val glSurfaceView = GLSurfaceView(activity)
+    private val renderer      = ARRenderer(activity, ::onFrame)
 
-    private val modelLoader = ModelLoader(arSceneView.engine, activity)
-    private val anchorNodes = mutableListOf<AnchorNode>()
+    private var session: Session? = null
+    private var sessionCreated = false
+
     private var currentPlane: Plane? = null
+    private val panelAnchors = mutableListOf<Anchor>()
+    private var frameCount = 0
 
     var eventSink: EventChannel.EventSink? = null
 
     init {
-        Log.d(TAG, "▶ ARSceneManager.init — view created, awaiting session")
-
-        // sessionConfiguration fires BEFORE session.resume() to apply the config
-        arSceneView.sessionConfiguration = { _: Session, config: Config ->
-            Log.d(TAG, "✔ sessionConfiguration applied")
-            config.depthMode           = Config.DepthMode.AUTOMATIC
-            config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
-            config.planeFindingMode    = Config.PlaneFindingMode.HORIZONTAL
-        }
-
-        // onSessionCreated fires once the session is fully initialized —
-        // this is the right place to wire the per-frame callback
-        arSceneView.onSessionCreated = { _: Session ->
-            Log.d(TAG, "✔ ARCore session created — wiring frame listener")
-            arSceneView.onSessionUpdated = { _: Session, frame: Frame ->
-                onFrame(frame)
-            }
-        }
-
-        arSceneView.onSessionFailed = { e: Exception ->
-            Log.e(TAG, "✖ ARCore session FAILED: ${e.message}", e)
-        }
+        Log.e(TAG, "ARSceneManager.init")
+        setupGLView()
+        activity.lifecycle.addObserver(this)
+        Log.e(TAG, "ARSceneManager.init -- complete")
     }
 
-    // ── Per-frame plane tracking ───────────────────────────────────────────────
+    private fun setupGLView() {
+        glSurfaceView.preserveEGLContextOnPause = true
+        glSurfaceView.setEGLContextClientVersion(2)
+        glSurfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0)
+        glSurfaceView.setRenderer(renderer)
+        glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
 
-    private fun onFrame(frame: Frame) {
-        val tracked = frame
-            .getUpdatedTrackables(Plane::class.java)
-            .filter { p: Plane ->
-                p.type == Plane.Type.HORIZONTAL_UPWARD_FACING
-                && p.trackingState == TrackingState.TRACKING
-                && p.subsumedBy == null
-            }
-            .maxByOrNull { p: Plane -> p.extentX * p.extentZ }
-            ?: return
-
-        val newArea  = tracked.extentX * tracked.extentZ
-        val currArea = (currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)
-
-        Log.d(TAG, "Plane: ${tracked.extentX}m × ${tracked.extentZ}m = ${"%.2f".format(newArea)}m²")
-
-        if (currentPlane == null || newArea > currArea * 1.1f) {
-            rebuildGrid(tracked)
+        // Fired on GL thread once surface is ready; we callback to UI thread
+        renderer.onSurfaceReadyCallback = {
+            Log.e(TAG, "GL surface ready")
+            activity.runOnUiThread { checkPermissionAndSetup() }
         }
-        streamHud()
-    }
 
-    // ── Grid ─────────────────────────────────────────────────────────────────
-
-    private fun rebuildGrid(plane: Plane, requestedCount: Int? = null) {
-        clearNodes()
-        currentPlane = plane
-
-        val positions = PanelGridCalculator.calculate(plane, requestedCount)
-        Log.d(TAG, "rebuildGrid → ${positions.size} panels")
-
-        for (pos in positions) {
-            try {
-                val pose   = plane.centerPose.compose(
-                    com.google.ar.core.Pose.makeTranslation(pos.x, 0f, pos.z)
-                )
-                val anchor = plane.createAnchor(pose)
-
-                val anchorNode = AnchorNode(arSceneView.engine, anchor)
-                arSceneView.addChildNode(anchorNode)
-                anchorNodes += anchorNode
-
-                modelLoader.loadModelInstanceAsync(
-                    fileLocation = "models/solar_panel.glb",
-                ) { instance: FilamentInstance? ->
-                    if (instance != null) {
-                        Log.d(TAG, "✔ GLB loaded — attaching ModelNode")
-                        anchorNode.addChildNode(
-                            ModelNode(modelInstance = instance, scaleToUnits = 1.7f)
-                        )
-                    } else {
-                        Log.e(TAG, "✖ GLB returned null — check asset path 'models/solar_panel.glb'")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Panel placement error: ${e.message}", e)
-            }
-        }
-    }
-
-    private fun clearNodes() {
-        anchorNodes.forEach {
-            try { it.destroy() } catch (e: Exception) { Log.w(TAG, e.message ?: "destroy error") }
-        }
-        anchorNodes.clear()
-    }
-
-    // ── Public API (MethodChannel) ────────────────────────────────────────────
-
-    fun addPanel()    { currentPlane?.let { rebuildGrid(it, (anchorNodes.size + 1).coerceAtMost(20)) } }
-    fun removePanel() { if (anchorNodes.size > 1) currentPlane?.let { rebuildGrid(it, anchorNodes.size - 1) } }
-    fun resetScan()   { clearNodes(); currentPlane = null }
-
-    fun getScanSnapshot(): Map<String, Any> {
-        val area = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
-        return mapOf(
-            "panelCount" to anchorNodes.size,
-            "systemKw"   to anchorNodes.size * 0.54,
-            "areaSqm"    to area,
-            "planeFound" to (currentPlane != null),
+        rootView.addView(
+            glSurfaceView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
         )
     }
 
-    // ── HUD stream ────────────────────────────────────────────────────────────
+    // ── Permission ────────────────────────────────────────────────────────────
+
+    private fun checkPermissionAndSetup() {
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.e(TAG, "Camera permission already granted")
+            createSession()
+        } else {
+            Log.e(TAG, "Requesting camera permission")
+            cameraPermLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    /** Called from MainActivity when the user grants camera permission. */
+    fun onCameraPermissionGranted() {
+        Log.e(TAG, "onCameraPermissionGranted")
+        createSession()
+    }
+
+    // ── Session ───────────────────────────────────────────────────────────────
+
+    private fun createSession() {
+        if (sessionCreated) return
+        try {
+            if (ArCoreApk.getInstance().requestInstall(activity, true)
+                == ArCoreApk.InstallStatus.INSTALL_REQUESTED
+            ) {
+                Log.e(TAG, "ARCore install requested")
+                return
+            }
+
+            val s = Session(activity)
+            Config(s).apply {
+                depthMode           = Config.DepthMode.AUTOMATIC
+                lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+                planeFindingMode    = Config.PlaneFindingMode.HORIZONTAL
+                updateMode          = Config.UpdateMode.LATEST_CAMERA_IMAGE
+            }.also { s.configure(it) }
+
+            Log.e(TAG, "ARCore session created — queuing GL-thread init")
+            // CRITICAL: setCameraTextureName must be called on the GL thread AND
+            // before session.resume(). Queue the whole startup sequence on GL thread.
+            glSurfaceView.queueEvent {
+                renderer.initCameraTexture(s)
+                // Now resume on main thread (session.resume() is main-thread-safe)
+                activity.runOnUiThread {
+                    try {
+                        s.resume()
+                        glSurfaceView.onResume()
+                        Log.e(TAG, "Session resumed after texture bind")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "resume after texture FAILED: ${e.message}", e)
+                    }
+                }
+            }
+
+            session = s
+            sessionCreated = true
+            // Do NOT call resumeSession() here — done in queueEvent above
+        } catch (e: Exception) {
+            Log.e(TAG, "createSession FAILED: ${e.message}", e)
+        }
+    }
+
+    private fun resumeSession() {
+        try {
+            session?.resume()
+            glSurfaceView.onResume()
+            Log.e(TAG, "Session resumed")
+        } catch (e: Exception) {
+            Log.e(TAG, "resumeSession FAILED: ${e.message}", e)
+        }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    override fun onResume(owner: LifecycleOwner) {
+        if (sessionCreated) resumeSession()
+    }
+
+    override fun onPause(owner: LifecycleOwner) {
+        if (sessionCreated) {
+            glSurfaceView.onPause()
+            session?.pause()
+        }
+    }
+
+    // ── Per-frame (GL thread) ─────────────────────────────────────────────────
+
+    private fun onFrame(frame: Frame) {
+        frameCount++
+        val s = session ?: return
+
+        // getAllTrackables returns ALL known planes every frame.
+        // getUpdatedTrackables only returns planes CHANGED this frame — returns 0 after initial detection.
+        val allPlanes = s.getAllTrackables(Plane::class.java)
+
+        if (frameCount % 60 == 0) {
+            Log.e(TAG, "frame#$frameCount all_planes=${allPlanes.size} " +
+                allPlanes.take(3).joinToString { "${it.type}|${it.trackingState}|${it.extentX}x${it.extentZ}" }
+            )
+        }
+
+        val best = allPlanes
+            .filter {
+                it.type == Plane.Type.HORIZONTAL_UPWARD_FACING
+                && it.trackingState == TrackingState.TRACKING
+                && it.subsumedBy == null
+            }
+            .maxByOrNull { it.extentX * it.extentZ } ?: return
+
+        val newArea  = best.extentX * best.extentZ
+        val currArea = (currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)
+
+        if (currentPlane == null || newArea > currArea * 1.1f) {
+            Log.e(TAG, "Plane detected: ${best.extentX}x${best.extentZ}=${String.format("%.2f",newArea)}m2")
+            activity.runOnUiThread { placeGrid(best) }
+        }
+        activity.runOnUiThread { streamHud() }
+    }
+
+    // ── Grid ──────────────────────────────────────────────────────────────────
+
+    private fun placeGrid(plane: Plane, count: Int? = null) {
+        clearAnchors()
+        currentPlane = plane
+        val positions = PanelGridCalculator.calculate(plane, count)
+        Log.e(TAG, "placeGrid: ${positions.size} panels")
+        for (pos in positions) {
+            try {
+                val anchor = plane.createAnchor(
+                    plane.centerPose.compose(Pose.makeTranslation(pos.x, 0f, pos.z))
+                )
+                panelAnchors += anchor
+                renderer.addAnchor(anchor)
+            } catch (e: Exception) {
+                Log.e(TAG, "createAnchor: ${e.message}")
+            }
+        }
+    }
+
+    private fun clearAnchors() {
+        panelAnchors.forEach { it.detach() }
+        panelAnchors.clear()
+        renderer.clearAnchors()
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    fun addPanel()    { currentPlane?.let { placeGrid(it, (panelAnchors.size + 1).coerceAtMost(20)) } }
+    fun removePanel() { if (panelAnchors.size > 1) { panelAnchors.last().detach(); panelAnchors.removeLastOrNull(); renderer.removeLastAnchor() } }
+    fun resetScan()   { clearAnchors(); currentPlane = null }
+
+    fun getScanSnapshot(): Map<String, Any> {
+        val a = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
+        return mapOf("panelCount" to panelAnchors.size, "systemKw" to panelAnchors.size * 0.54, "areaSqm" to a, "planeFound" to (currentPlane != null))
+    }
 
     private fun streamHud() {
         val sink = eventSink ?: return
-        val area = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
+        val a = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
         try {
             sink.success(mapOf(
-                "panelCount" to anchorNodes.size,
-                "maxPanels"  to PanelGridCalculator.maxPanelsFor(area.toFloat()),
-                "systemKw"   to anchorNodes.size * 0.54,
-                "areaSqm"    to area,
-                "planeFound" to (currentPlane != null),
+                "panelCount" to panelAnchors.size, "maxPanels" to PanelGridCalculator.maxPanelsFor(a.toFloat()),
+                "systemKw" to panelAnchors.size * 0.54, "areaSqm" to a, "planeFound" to (currentPlane != null),
             ))
-        } catch (e: Exception) { Log.w(TAG, "EventSink.success() failed: ${e.message}") }
+        } catch (_: Exception) {}
     }
 
     // ── PlatformView ──────────────────────────────────────────────────────────
 
-    override fun getView(): View = arSceneView
+    override fun getView(): View = rootView
+
     override fun dispose() {
-        Log.d(TAG, "dispose()")
-        clearNodes()
-        try { arSceneView.destroy() } catch (e: Exception) { Log.w(TAG, "destroy: ${e.message}") }
+        activity.lifecycle.removeObserver(this)
+        clearAnchors()
+        try { glSurfaceView.onPause() } catch (_: Exception) {}
+        session?.close(); session = null
     }
 }

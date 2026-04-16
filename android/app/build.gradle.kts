@@ -24,6 +24,10 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Disable Flutter Impeller (Vulkan) — Filament/ARSceneView manages its
+        // own GL context; both renderers conflict over AHardwareBuffer allocation.
+        // resValue overrides the manifest meta-data at build time (most reliable method).
+        resValue("string", "io_flutter_embedding_android_EnableImpeller", "false")
     }
 
     buildTypes {

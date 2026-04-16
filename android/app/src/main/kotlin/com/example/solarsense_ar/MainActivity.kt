@@ -9,15 +9,9 @@ import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
 import android.content.Context
+import android.Manifest
+import androidx.activity.result.contract.ActivityResultContracts
 
-/**
- * FlutterFragmentActivity is the correct base class when ARSceneView 2.2.1 is involved.
- * It extends AppCompatActivity → FragmentActivity → ComponentActivity, so
- * passing `this` to ARSceneManager(activity: ComponentActivity) is type-safe with NO cast.
- *
- * NOTE: FlutterActivity extends Activity directly (not ComponentActivity), which is
- * why ARSceneView 2.2.1 crashes with ClassCastException when FlutterActivity is used.
- */
 class MainActivity : FlutterFragmentActivity() {
 
     companion object {
@@ -27,39 +21,38 @@ class MainActivity : FlutterFragmentActivity() {
         private const val EVENT_CH  = "com.solarsense.ar/events"
     }
 
-    // FlutterFragmentActivity IS-A ComponentActivity — no cast required
-    private val arSceneManager by lazy {
-        Log.d(TAG, "▶ lazy ARSceneManager init")
-        ARSceneManager(this)   // 'this' is ComponentActivity via FlutterFragmentActivity
+    // Register BEFORE Activity reaches STARTED state (AndroidX constraint).
+    // Must be registered in the constructor / field-init phase, not lazily.
+    private val cameraPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.e(TAG, "Camera permission result: granted=$granted")
+        if (granted) arManagerRef?.onCameraPermissionGranted()
     }
 
-    /**
-     * FlutterFragmentActivity delegates engine creation differently from FlutterActivity.
-     * Override provideFlutterEngine to cache the engine, which guarantees this class
-     * participates in configureFlutterEngine.
-     *
-     * Simply calling super.configureFlutterEngine works — the key is that
-     * FlutterFragmentActivity's internal FlutterFragment also forwards this call.
-     */
+    // Weak reference so ARSceneManager can receive the permission callback
+    private var arManagerRef: ARSceneManager? = null
+
+    private val arSceneManager: ARSceneManager by lazy {
+        Log.e(TAG, "lazy ARSceneManager init")
+        ARSceneManager(this, cameraPermLauncher).also { arManagerRef = it }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        Log.d(TAG, "✔ configureFlutterEngine — registering AR platform view")
+        Log.e(TAG, "configureFlutterEngine -- registering AR platform view")
 
-        // ── Platform view ─────────────────────────────────────────────────────
         flutterEngine.platformViewsController.registry
             .registerViewFactory(
                 VIEW_TYPE,
                 object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
-                    override fun create(
-                        context: Context, viewId: Int, args: Any?,
-                    ): PlatformView {
-                        Log.d(TAG, "▶ factory.create() — building ARSceneView")
+                    override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+                        Log.e(TAG, "factory.create() -- building ARSceneView")
                         return arSceneManager
                     }
                 },
             )
 
-        // ── MethodChannel ─────────────────────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CH)
             .setMethodCallHandler { call, result ->
                 try {
@@ -75,11 +68,10 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
 
-        // ── EventChannel ──────────────────────────────────────────────────────
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CH)
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(args: Any?, sink: EventChannel.EventSink) {
-                    Log.d(TAG, "EventChannel: HUD stream opened")
+                    Log.e(TAG, "EventChannel: HUD stream opened")
                     arSceneManager.eventSink = sink
                 }
                 override fun onCancel(args: Any?) {
