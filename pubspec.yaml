@@ -38,11 +38,11 @@ dependencies:
   fl_chart: ^1.2.0
   google_fonts: ^8.0.2
   http: ^1.2.1
+  camera: ^0.12.0+1
   geolocator: ^12.0.0
   permission_handler: ^11.0.0
   image: ^4.1.0
   tflite_flutter: ^0.10.4
-  model_viewer_plus: ^1.7.2
 
 dev_dependencies:
   flutter_test:

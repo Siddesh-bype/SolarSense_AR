@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/splash/splash_screen.dart';
 
-// Placeholder imports for unused routes right now
+import 'package:camera/camera.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/auth/login_register_screen.dart';
 import 'screens/home/dashboard_screen.dart';
@@ -14,8 +14,15 @@ import 'screens/vendors/vendor_connect_screen.dart';
 import 'screens/vendors/provider_scheme_screen.dart';
 import 'screens/profile/profile_screen.dart';
 
+List<CameraDescription> globalCameras = [];
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    globalCameras = await availableCameras();
+  } catch (e) {
+    debugPrint('No cameras: $e');
+  }
   runApp(const SolarSenseApp());
 }
 
