@@ -7,12 +7,11 @@ import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ── Channel constants ────────────────────────────────────────────────────────
+// All panel/area/system-kW values are produced by the native ARCore module
+// and streamed through _kEventCh. Nothing about panels is hardcoded here.
 const _kViewType = 'com.solarsense.ar/scene';
 const _kMethodCh = MethodChannel('com.solarsense.ar/channel');
 const _kEventCh  = EventChannel('com.solarsense.ar/events');
-
-// Panel size constants (for local display only — real values come from ARCore)
-const double _kPanelKw   = 0.54;  // 540 W panel
 
 class ARCameraScreen extends StatefulWidget {
   const ARCameraScreen({super.key});

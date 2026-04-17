@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/user_session.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 import '../../widgets/custom_textfield.dart';
@@ -15,6 +16,54 @@ class LoginRegisterScreen extends StatefulWidget {
 class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
   bool isLogin = true;
   bool obscurePassword = true;
+  String? _error;
+
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _error = 'Enter a valid email.');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters.');
+      return;
+    }
+    if (!isLogin) {
+      if (_nameCtrl.text.trim().isEmpty) {
+        setState(() => _error = 'Enter your full name.');
+        return;
+      }
+      if (_passwordCtrl.text != _confirmCtrl.text) {
+        setState(() => _error = 'Passwords do not match.');
+        return;
+      }
+    }
+
+    UserSession.instance.updateProfile(
+      name: isLogin
+          ? (email.split('@').first)
+          : _nameCtrl.text.trim(),
+      email: email,
+    );
+
+    Navigator.pushReplacementNamed(context, '/home');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +95,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 ],
               ),
               const SizedBox(height: 56),
-              
+
               // Custom Pill Tabs
               Container(
                 decoration: BoxDecoration(
@@ -56,34 +105,37 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 padding: const EdgeInsets.all(4),
                 child: Row(
                   children: [
-                    Expanded(child: _buildTab('Login', isLogin, () => setState(() => isLogin = true))),
-                    Expanded(child: _buildTab('Register', !isLogin, () => setState(() => isLogin = false))),
+                    Expanded(child: _buildTab('Login', isLogin, () => setState(() { isLogin = true; _error = null; }))),
+                    Expanded(child: _buildTab('Register', !isLogin, () => setState(() { isLogin = false; _error = null; }))),
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Forms
               if (!isLogin) ...[
                 _buildFieldLabel('Full Name'),
-                const CustomTextField(
-                  hintText: 'Durgesh Shukla',
+                CustomTextField(
+                  controller: _nameCtrl,
+                  hintText: 'Your name',
                   prefixIcon: Icons.person_outline,
                 ),
                 const SizedBox(height: 20),
               ],
-              
+
               _buildFieldLabel('Email Address'),
-              const CustomTextField(
-                hintText: 'durgesh@example.com',
+              CustomTextField(
+                controller: _emailCtrl,
+                hintText: 'you@example.com',
                 prefixIcon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
-              
+
               _buildFieldLabel('Password'),
               CustomTextField(
+                controller: _passwordCtrl,
                 hintText: '••••••••',
                 prefixIcon: Icons.lock_outline,
                 obscureText: obscurePassword,
@@ -95,17 +147,18 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                   onPressed: () => setState(() => obscurePassword = !obscurePassword),
                 ),
               ),
-              
+
               if (!isLogin) ...[
                 const SizedBox(height: 20),
                 _buildFieldLabel('Confirm Password'),
                 CustomTextField(
+                  controller: _confirmCtrl,
                   hintText: '••••••••',
                   prefixIcon: Icons.lock_outline,
                   obscureText: obscurePassword,
                 ),
               ],
-              
+
               if (isLogin) ...[
                 const SizedBox(height: 8),
                 Align(
@@ -119,12 +172,19 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
               ] else ...[
                 const SizedBox(height: 32),
               ],
-              
+
+              if (_error != null) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                ),
+              ],
+
               PrimaryButton(
                 text: isLogin ? 'Login' : 'Create Account',
-                onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+                onPressed: _submit,
               ),
-              
+
               const SizedBox(height: 32),
               Row(
                 children: [
@@ -137,12 +197,12 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              
+
               SecondaryButton(
                 text: 'Continue with Google',
                 onPressed: () {},
               ),
-              
+
               const SizedBox(height: 48),
               Text(
                 'By continuing you agree to our Terms & Privacy Policy',

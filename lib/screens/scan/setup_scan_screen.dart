@@ -1,7 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/location_service.dart';
+import '../../services/user_session.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/custom_textfield.dart';
+
+// stateKey -> display label. Keys must match assets/data/state_subsidies.json.
+const Map<String, String> _kStates = {
+  'maharashtra': 'Maharashtra',
+  'gujarat': 'Gujarat',
+  'karnataka': 'Karnataka',
+  'rajasthan': 'Rajasthan',
+  'tamil_nadu': 'Tamil Nadu',
+  'uttar_pradesh': 'Uttar Pradesh',
+};
 
 class SetupScanScreen extends StatefulWidget {
   const SetupScanScreen({super.key});
@@ -11,9 +23,83 @@ class SetupScanScreen extends StatefulWidget {
 }
 
 class _SetupScanScreenState extends State<SetupScanScreen> {
-  String _selectedRoof = 'Flat';
-  String? _selectedProvider = 'MSEDCL';
-  double _billAmount = 2500;
+  final _locationService = LocationService();
+  final _session = UserSession.instance;
+
+  // All fields start empty — user must fill them.
+  final _cityCtrl = TextEditingController();
+  final _billCtrl = TextEditingController();
+  final _tariffCtrl = TextEditingController();
+  final _roofAreaCtrl = TextEditingController();
+
+  String? _stateKey;
+  String? _roofType;
+  String? _provider;
+  bool _locating = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefill from session if the user has already been here before.
+    _cityCtrl.text = _session.city ?? '';
+    _billCtrl.text = _session.monthlyBillInr?.toStringAsFixed(0) ?? '';
+    _tariffCtrl.text = _session.avgTariffInr?.toStringAsFixed(2) ?? '';
+    _roofAreaCtrl.text = _session.roofAreaSqFt?.toStringAsFixed(0) ?? '';
+    _stateKey = _session.stateKey;
+    _roofType = _session.roofType;
+    _provider = _session.electricityProvider;
+  }
+
+  @override
+  void dispose() {
+    _cityCtrl.dispose();
+    _billCtrl.dispose();
+    _tariffCtrl.dispose();
+    _roofAreaCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _useGps() async {
+    setState(() { _locating = true; _error = null; });
+    try {
+      final loc = await _locationService.getCurrentLatLon();
+      _session.updateScanInputs(lat: loc.lat, lon: loc.lon);
+    } catch (_) {
+      setState(() => _error = 'Could not get GPS. Enter location manually.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  String? _validate() {
+    final bill = double.tryParse(_billCtrl.text.trim());
+    if (bill == null || bill <= 0) return 'Enter your monthly electricity bill.';
+    if (_stateKey == null) return 'Select your state.';
+    return null;
+  }
+
+  void _continue() {
+    final err = _validate();
+    if (err != null) {
+      setState(() => _error = err);
+      return;
+    }
+    final tariff = double.tryParse(_tariffCtrl.text.trim());
+    final area = double.tryParse(_roofAreaCtrl.text.trim());
+
+    _session.updateScanInputs(
+      city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+      stateKey: _stateKey,
+      monthlyBillInr: double.parse(_billCtrl.text.trim()),
+      avgTariffInr: tariff,
+      electricityProvider: _provider,
+      roofType: _roofType,
+      roofAreaSqFt: area,
+    );
+
+    Navigator.pushNamed(context, '/scan/ar');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,11 +124,13 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Help us calculate accurately',
+                'Tell us about your home — the AR scan will handle the panels.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
               ),
               const SizedBox(height: 24),
               _buildLocationCard(),
+              const SizedBox(height: 16),
+              _buildStateCard(),
               const SizedBox(height: 16),
               _buildRoofTypeCard(),
               const SizedBox(height: 16),
@@ -50,11 +138,17 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
               const SizedBox(height: 16),
               _buildBillCard(),
               const SizedBox(height: 16),
+              _buildTariffCard(),
+              const SizedBox(height: 16),
               _buildProviderCard(),
-              const SizedBox(height: 32),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+              ],
+              const SizedBox(height: 24),
               PrimaryButton(
                 text: 'Continue to AR Scan',
-                onPressed: () => Navigator.pushNamed(context, '/scan/ar'),
+                onPressed: _continue,
               ),
               const SizedBox(height: 24),
             ],
@@ -99,18 +193,24 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
 
   Widget _buildLocationCard() {
     return _buildCardBase(
-      label: 'Your Location',
+      label: 'Your City',
       child: Column(
         children: [
-          const CustomTextField(
-            hintText: 'Pune, Maharashtra',
+          CustomTextField(
+            controller: _cityCtrl,
+            hintText: 'e.g. Pune',
             prefixIcon: Icons.location_on_outlined,
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.my_location, color: AppColors.primary),
-            label: const Text('Use GPS', style: TextStyle(color: AppColors.primary)),
+            onPressed: _locating ? null : _useGps,
+            icon: _locating
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.my_location, color: AppColors.primary),
+            label: Text(
+              _session.lat != null ? 'GPS locked' : 'Use GPS',
+              style: const TextStyle(color: AppColors.primary),
+            ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
               side: const BorderSide(color: AppColors.border),
@@ -122,15 +222,40 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
     );
   }
 
+  Widget _buildStateCard() {
+    return _buildCardBase(
+      label: 'State (for subsidy calculation)',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _stateKey,
+            isExpanded: true,
+            hint: const Text('Select your state'),
+            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
+            items: _kStates.entries
+                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                .toList(),
+            onChanged: (val) => setState(() => _stateKey = val),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRoofTypeCard() {
     return _buildCardBase(
       label: 'Roof Type',
       child: Row(
         children: ['Flat', 'Sloped', 'Mixed'].map((type) {
-          final isSelected = _selectedRoof == type;
+          final isSelected = _roofType == type;
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _selectedRoof = type),
+              onTap: () => setState(() => _roofType = type),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -157,15 +282,16 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
 
   Widget _buildRoofAreaCard() {
     return _buildCardBase(
-      label: 'Approximate Roof Area (sq ft)',
-      child: const CustomTextField(
+      label: 'Approximate Roof Area (sq ft) — optional',
+      child: CustomTextField(
+        controller: _roofAreaCtrl,
         hintText: '0',
         keyboardType: TextInputType.number,
-        suffixIcon: Padding(
+        suffixIcon: const Padding(
           padding: EdgeInsets.all(14.0),
           child: Text('sq ft', style: TextStyle(color: AppColors.textSecondary)),
         ),
-        helperText: "Leave blank — we'll estimate from AR scan",
+        helperText: "Leave blank — we'll estimate from the AR scan",
       ),
     );
   }
@@ -173,44 +299,24 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
   Widget _buildBillCard() {
     return _buildCardBase(
       label: 'Average Monthly Bill (₹)',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '₹${_billAmount.toInt()}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: AppColors.primary,
-              inactiveTrackColor: AppColors.primary.withOpacity(0.2),
-              thumbColor: AppColors.primary,
-              overlayColor: AppColors.primary.withOpacity(0.1),
-            ),
-            child: Slider(
-              value: _billAmount,
-              min: 500,
-              max: 10000,
-              divisions: 95,
-              onChanged: (val) => setState(() => _billAmount = val),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('₹500', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              Text('₹10,000+', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-            ],
-          )
-        ],
+      child: CustomTextField(
+        controller: _billCtrl,
+        hintText: 'e.g. 2500',
+        keyboardType: TextInputType.number,
+        prefixIcon: Icons.currency_rupee,
+      ),
+    );
+  }
+
+  Widget _buildTariffCard() {
+    return _buildCardBase(
+      label: 'Electricity Tariff (₹ / kWh) — optional',
+      child: CustomTextField(
+        controller: _tariffCtrl,
+        hintText: 'e.g. 8.5',
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        prefixIcon: Icons.bolt_outlined,
+        helperText: "Leave blank — we'll use the state average",
       ),
     );
   }
@@ -226,13 +332,14 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
-            value: _selectedProvider,
+            value: _provider,
             isExpanded: true,
+            hint: const Text('Select provider'),
             icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
-            items: ['MSEDCL', 'BESCOM', 'TATA Power', 'Other']
+            items: ['MSEDCL', 'BESCOM', 'TATA Power', 'Adani', 'Torrent Power', 'Other']
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
-            onChanged: (val) => setState(() => _selectedProvider = val),
+            onChanged: (val) => setState(() => _provider = val),
           ),
         ),
       ),

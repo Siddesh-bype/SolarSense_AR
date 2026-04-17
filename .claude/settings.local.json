@@ -5,7 +5,9 @@
       "Bash(flutter pub:*)",
       "Bash(flutter analyze:*)",
       "Bash(flutter build:*)",
-      "Bash(ls \"C:/AAA Projects/AR Module/SolarSense_AR/android/app/\"*.pro)"
+      "Bash(ls \"C:/AAA Projects/AR Module/SolarSense_AR/android/app/\"*.pro)",
+      "Bash(awk -F'/' '{if \\(NF==1\\) print \"  \" $0; else if \\(NF==2\\) print \"  \" $1 \"/\" $2}')",
+      "Bash(awk '{print $NF}')"
     ]
   }
 }

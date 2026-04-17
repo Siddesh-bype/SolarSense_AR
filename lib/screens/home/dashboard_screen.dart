@@ -1,6 +1,7 @@
 import '../scan/setup_scan_screen.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/user_session.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -76,6 +77,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Widget _buildHeader() {
+    final name = UserSession.instance.name;
+    final greeting = name == null || name.isEmpty
+        ? 'Welcome back'
+        : 'Good morning, $name';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
@@ -83,10 +88,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Good morning, Durgesh', style: TextStyle(color: AppColors.navy, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-              SizedBox(height: 3),
-              Text('Plan your solar installation today', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            children: [
+              Text(greeting, style: const TextStyle(color: AppColors.navy, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+              const SizedBox(height: 3),
+              const Text('Plan your solar installation today', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
             ],
           ),
           GestureDetector(
@@ -333,17 +338,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
 // ─── Notification Bottom Sheet ─────────────────────────────────────────────
 class _NotificationSheet extends StatelessWidget {
-  final List<_Notif> _notifs = const [
-    _Notif(Icons.wb_sunny_outlined, 'Solar Tip', 'Today is sunny — ideal for running your high-power appliances to save on bills.', '2 min ago', true),
-    _Notif(Icons.account_balance_outlined, 'PM Surya Ghar', 'New subsidy window open: apply before 30 April to claim ₹78,000.', '1 hr ago', true),
-    _Notif(Icons.bar_chart_outlined, 'Report Ready', 'Your last AR scan analysis has been processed. Tap to view.', '3 hrs ago', false),
-    _Notif(Icons.bolt_outlined, 'Energy Alert', 'Your estimated monthly bill of ₹2,500 can be reduced by 72% with solar.', 'Yesterday', false),
-  ];
-
   const _NotificationSheet();
+
+  List<_Notif> _buildNotifs() {
+    final bill = UserSession.instance.monthlyBillInr;
+    final billStr = bill == null ? 'your current bill' : '₹${bill.toStringAsFixed(0)}';
+    return [
+      const _Notif(Icons.wb_sunny_outlined, 'Solar Tip', 'Today is sunny — ideal for running your high-power appliances to save on bills.', '2 min ago', true),
+      const _Notif(Icons.account_balance_outlined, 'PM Surya Ghar', 'New subsidy window open: apply before 30 April to claim ₹78,000.', '1 hr ago', true),
+      const _Notif(Icons.bar_chart_outlined, 'Report Ready', 'Your last AR scan analysis has been processed. Tap to view.', '3 hrs ago', false),
+      _Notif(Icons.bolt_outlined, 'Energy Alert', 'Your estimated monthly bill of $billStr can be reduced by up to 72% with solar.', 'Yesterday', false),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
+    final notifs = _buildNotifs();
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
@@ -383,10 +393,10 @@ class _NotificationSheet extends StatelessWidget {
               child: ListView.separated(
                 controller: scrollController,
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _notifs.length,
+                itemCount: notifs.length,
                 separatorBuilder: (context, index) => const Divider(indent: 72, endIndent: 16, height: 1),
                 itemBuilder: (_, i) {
-                  final n = _notifs[i];
+                  final n = notifs[i];
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     leading: Container(

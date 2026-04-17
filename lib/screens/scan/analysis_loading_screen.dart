@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/enriched_scan_result.dart';
 import '../../services/location_service.dart';
 import '../../services/scan_orchestrator.dart';
+import '../../services/user_session.dart';
 
 class AnalysisLoadingScreen extends StatefulWidget {
   const AnalysisLoadingScreen({super.key});
@@ -19,6 +20,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
   double _progress = 0;
   int _currentStep = 0;
   bool _hasError = false;
+  String? _errorMessage;
 
   final List<Map<String, dynamic>> _steps = [
     {"text": "Fetching solar irradiance data...", "icon": Icons.wb_sunny, "color": Colors.orangeAccent},
@@ -30,6 +32,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
   // ── On-device services (no backend) ────────────────────────────────────────
   final _orchestrator = ScanOrchestrator();
   final _locationService = LocationService();
+  final _session = UserSession.instance;
 
   @override
   void initState() {
@@ -37,36 +40,61 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
     _controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 4))
           ..repeat();
-    _runAnalysis();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runAnalysis());
   }
 
   Future<void> _runAnalysis() async {
-    setState(() { _hasError = false; });
+    setState(() { _hasError = false; _errorMessage = null; });
 
     try {
-      // ── Step 1: Initialise services + get GPS location ─────────────────────
+      // ── Read AR snapshot from route args ──────────────────────────────────
+      final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? const {};
+      final panelCount = (args['panelCount'] as num?)?.toInt() ?? 0;
+      final systemKw = (args['systemKw'] as num?)?.toDouble() ?? 0.0;
+      final areaSqm = (args['areaSqm'] as num?)?.toDouble() ?? 0.0;
+
+      if (panelCount <= 0 || systemKw <= 0 || areaSqm <= 0) {
+        throw StateError('AR scan did not produce valid panel layout. Please rescan.');
+      }
+
+      // ── Read user inputs from session ─────────────────────────────────────
+      if (_session.stateKey == null || _session.monthlyBillInr == null) {
+        throw StateError('Missing user setup data. Please complete the setup form.');
+      }
+
+      // ── Step 1: Initialise services + location ─────────────────────────────
       _setStep(0, 0.05);
       await _orchestrator.init();
-      final latLon = await _locationService.getCurrentLatLon();
+      double lat = _session.lat ?? 0, lon = _session.lon ?? 0;
+      if (lat == 0 && lon == 0) {
+        final latLon = await _locationService.getCurrentLatLon();
+        lat = latLon.lat; lon = latLon.lon;
+      }
       _setStep(0, 0.20);
 
-      // ── Step 2: PVGIS irradiance (concurrent with obstacle detection) ───────
-      // ScanOrchestrator runs PVGIS + obstacles concurrently internally.
-      // We update the step label before starting so the UI feels responsive.
+      // ── Step 2: PVGIS + obstacle detection (concurrent inside orchestrator) ─
       _setStep(1, 0.35);
 
+      // Tariff: user override, else derive from monthly bill (assume ~100 kWh
+      // per ₹ spent isn't right — safer fallback is state-average ₹8.5/kWh,
+      // but we let subsidy_service's state data fill that in if user skipped).
+      final avgTariff = _session.avgTariffInr ?? 8.5;
+
+      // Usable roof area: AR gives total detected area; ~75% is usable for
+      // panels after setbacks/obstacles.
+      final usableAreaM2 = areaSqm * 0.75;
+
       final EnrichedScanResult result = await _orchestrator.enrichScan(
-        lat: latLon.lat,
-        lon: latLon.lon,
-        // Demo defaults — in production pass from SetupScanScreen route args
-        systemKw: 3.0,
-        stateName: 'maharashtra',
-        totalAreaM2: 50.0,
-        usableAreaM2: 38.0,
-        panelCount: 12,
-        avgTariff: 8.5, // ₹/kWh — Maharashtra average
+        lat: lat,
+        lon: lon,
+        systemKw: systemKw,
+        stateName: _session.stateKey!,
+        totalAreaM2: areaSqm,
+        usableAreaM2: usableAreaM2,
+        panelCount: panelCount,
+        avgTariff: avgTariff,
         priceSensitivity: 'mid',
-        cameraFrame: null, // TODO: pass camera frame from AR scan
+        cameraFrame: null,
       );
 
       // ── Step 3: Subsidy + brands resolved (already done inside orchestrator) ─
@@ -86,7 +114,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/report', arguments: result);
     } catch (e) {
-      if (mounted) setState(() => _hasError = true);
+      if (mounted) setState(() { _hasError = true; _errorMessage = e.toString(); });
     }
   }
 
@@ -261,7 +289,14 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
         const SizedBox(height: 16),
         Text('Analysis failed', style: GoogleFonts.manrope(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Text('Please check your connection and try again.', style: GoogleFonts.inter(fontSize: 14, color: Colors.white60), textAlign: TextAlign.center),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            _errorMessage ?? 'Please check your connection and try again.',
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.white60),
+            textAlign: TextAlign.center,
+          ),
+        ),
         const SizedBox(height: 32),
         ElevatedButton.icon(
           onPressed: _runAnalysis,

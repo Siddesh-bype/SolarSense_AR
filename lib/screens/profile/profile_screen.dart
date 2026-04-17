@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/user_session.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  String _initialsFrom(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final session = UserSession.instance;
+    final name = (session.name == null || session.name!.isEmpty) ? 'Guest User' : session.name!;
+    final email = (session.email == null || session.email!.isEmpty) ? '—' : session.email!;
+    final initials = _initialsFrom(name);
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
@@ -40,7 +52,7 @@ class ProfileScreen extends StatelessWidget {
                       gradient: LinearGradient(colors: [AppColors.primary, Color(0xFFFFB690)], begin: Alignment.topRight, end: Alignment.bottomLeft),
                       boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
                     ),
-                    child: const Center(child: Text('DS', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold))),
+                    child: Center(child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold))),
                   ),
                   Container(
                     padding: const EdgeInsets.all(6),
@@ -51,9 +63,9 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Durgesh Shukla', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.text)),
+            Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.text)),
             const SizedBox(height: 4),
-            const Text('durgesh.shukla@email.com', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
+            Text(email, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
             const SizedBox(height: 32),
 
             // Bento Stats Grid
