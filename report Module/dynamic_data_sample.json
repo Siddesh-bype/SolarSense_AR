@@ -1,0 +1,112 @@
+{
+  "report_id": "REP123456",
+  "timestamp": "2026-04-16T12:30:00Z",
+
+  "user": {
+    "user_id": "USR001",
+    "name": "Prakash Swami",
+    "location": {
+      "city": "Pune",
+      "state": "Maharashtra",
+      "pincode": "411001",
+      "coordinates": {
+        "lat": 18.5204,
+        "lng": 73.8567
+      }
+    }
+  },
+
+  "input_data": {
+    "monthly_units": 300,
+    "monthly_bill": 2500,
+    "electricity_tariff_per_unit": 8.5,
+    "rooftop": {
+      "total_area_sqm": 100,
+      "usable_area_sqm": 80,
+      "obstacles_area_sqm": 20,
+      "obstacle_details": "Water tank, staircase headroom, parapet shadow zone"
+    },
+    "provider_selected": "Tata Power Solar"
+  },
+
+  "solar_estimation": {
+    "system_size_kw": 4.0,
+    "panel": {
+      "watt_per_panel": 550,
+      "number_of_panels": 8,
+      "area_per_panel_sqm": 2.58,
+      "panel_model": "Tata Power 550W Mono PERC",
+      "panel_type": "Monocrystalline"
+    },
+    "inverter": {
+      "type": "String Inverter",
+      "capacity_kw": 5.0,
+      "brand": "Growatt"
+    },
+    "efficiency": 0.18,
+    "degradation_rate_per_year": 0.005,
+    "system_lifetime_years": 25,
+    "layout_description": "8 panels arranged in 2 rows of 4, south-facing at 18-degree tilt"
+  },
+
+  "energy_output": {
+    "monthly_units_generated": 480,
+    "annual_units_generated": 5760,
+    "performance_ratio": 0.75,
+    "average_sun_hours_per_day": 5.2,
+    "monthly_breakdown": [420, 450, 500, 540, 560, 480, 380, 400, 460, 520, 490, 460]
+  },
+
+  "financial_analysis": {
+    "cost": {
+      "price_per_watt": 54,
+      "total_installation_cost": 216000,
+      "component_breakdown": {
+        "solar_panels": 132000,
+        "inverter": 40000,
+        "mounting_structure": 18000,
+        "wiring_and_accessories": 12000,
+        "installation_labor": 10000,
+        "net_metering_charges": 4000
+      }
+    },
+    "subsidy": {
+      "scheme": "PM Surya Ghar Muft Bijli Yojana",
+      "eligible": true,
+      "subsidy_amount": 78000,
+      "subsidy_detail": "Rs 30,000/kW for first 2 kW + Rs 18,000/kW for next 1 kW (up to 3 kW cap applicable)",
+      "subsidy_percentage": 36.1
+    },
+    "net_cost": 138000
+  },
+
+  "savings": {
+    "monthly_savings": 2000,
+    "annual_savings": 24000,
+    "lifetime_savings_25yr": 600000,
+    "yearly_cashflow": [
+      -138000, -114000, -90000, -66000, -42000, -18000,
+      6000, 30000, 54000, 78000, 102000, 126000,
+      150000, 174000, 198000, 222000, 246000, 270000,
+      294000, 318000, 342000, 366000, 390000, 414000, 438000
+    ]
+  },
+
+  "roi_analysis": {
+    "payback_period_years": 5.75,
+    "roi_percentage": 334.8,
+    "breakeven_year": 6
+  },
+
+  "environmental_impact": {
+    "co2_savings_per_year_tons": 4.5,
+    "co2_savings_lifetime_tons": 112.5,
+    "trees_equivalent": 200,
+    "homes_powered_equivalent": 1.5
+  },
+
+  "visual_data": {
+    "ar_snapshot_path": "assets/ar_rooftop_snapshot.png",
+    "panel_layout_path": "assets/panel_layout.png"
+  }
+}
