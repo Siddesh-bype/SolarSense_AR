@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/enriched_scan_result.dart';
+import '../../services/report_api_service.dart';
 import '../../services/user_session.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../widgets/solar_panel_3d.dart';
 
-class FinancialReportScreen extends StatelessWidget {
+class FinancialReportScreen extends StatefulWidget {
   const FinancialReportScreen({super.key});
+
+  @override
+  State<FinancialReportScreen> createState() => _FinancialReportScreenState();
+}
+
+class _FinancialReportScreenState extends State<FinancialReportScreen> {
+  bool _downloading = false;
+  String? _lastPdfPath;
 
   @override
   Widget build(BuildContext context) {
@@ -16,12 +27,72 @@ class FinancialReportScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Your Solar Report'),
         actions: [
-          IconButton(onPressed: () {}, icon: const Icon(Icons.share_outlined)),
-          IconButton(onPressed: () {}, icon: const Icon(Icons.download_outlined)),
+          IconButton(
+            onPressed: data == null || _downloading ? null : () => _share(data),
+            icon: const Icon(Icons.share_outlined),
+          ),
+          IconButton(
+            onPressed: data == null || _downloading ? null : () => _download(data),
+            icon: _downloading
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.download_outlined),
+          ),
         ],
       ),
       body: data == null ? _buildEmptyState(context) : _buildReport(context, data),
     );
+  }
+
+  Future<void> _download(EnrichedScanResult data) async {
+    setState(() => _downloading = true);
+    try {
+      final path = await ReportApiService.instance.generateAndDownload(data);
+      _lastPdfPath = path;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Report saved'),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () => OpenFilex.open(path),
+          ),
+        ),
+      );
+      await OpenFilex.open(path);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report failed: ${_friendly(e)}'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  Future<void> _share(EnrichedScanResult data) async {
+    final path = _lastPdfPath;
+    if (path == null) {
+      await _download(data);
+      final p = _lastPdfPath;
+      if (p == null) return;
+      await Share.shareXFiles([XFile(p)], text: 'My SolarSense AR report');
+      return;
+    }
+    await Share.shareXFiles([XFile(path)], text: 'My SolarSense AR report');
+  }
+
+  String _friendly(Object e) {
+    final s = e.toString();
+    return s.length > 100 ? '${s.substring(0, 100)}…' : s;
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -140,7 +211,12 @@ class FinancialReportScreen extends StatelessWidget {
               SizedBox(
                 width: 80,
                 height: 80,
-                child: SolarPanel3DWidget(panelCount: data.panelCount, size: 80),
+                child: SolarPanel3DWidget(
+                  panelCount: data.panelCount,
+                  size: 80,
+                  // Tiny hero tile — static render, no shimmer ticker.
+                  animate: false,
+                ),
               )
             ],
           ),
@@ -464,9 +540,17 @@ class FinancialReportScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ElevatedButton(
-              onPressed: () {},
-              child: const Text('Download PDF Report'),
+            ElevatedButton.icon(
+              onPressed: _downloading ? null : () => _download(data),
+              icon: _downloading
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.picture_as_pdf_outlined),
+              label: Text(_downloading ? 'Generating…' : 'Download PDF Report'),
             ),
             const SizedBox(height: 12),
             OutlinedButton(

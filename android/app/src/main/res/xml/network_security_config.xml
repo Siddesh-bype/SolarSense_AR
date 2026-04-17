@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext (HTTP) only for localhost — required by model_viewer_plus
-         which serves the GLB file from a local HTTP server on 127.0.0.1 -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
-    <!-- All other traffic stays HTTPS-only -->
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- Demo/dev build: cleartext allowed everywhere so the app can reach
+         a local report backend on the user's laptop (any LAN IP) without
+         having to enumerate each subnet. HTTPS is still used for PVGIS. -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

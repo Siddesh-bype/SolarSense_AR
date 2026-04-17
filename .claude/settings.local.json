@@ -7,7 +7,11 @@
       "Bash(flutter build:*)",
       "Bash(ls \"C:/AAA Projects/AR Module/SolarSense_AR/android/app/\"*.pro)",
       "Bash(awk -F'/' '{if \\(NF==1\\) print \"  \" $0; else if \\(NF==2\\) print \"  \" $1 \"/\" $2}')",
-      "Bash(awk '{print $NF}')"
+      "Bash(awk '{print $NF}')",
+      "Bash(npm list *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"console.log\\(require.resolve\\('docx'\\)\\)\")",
+      "Bash(npm root *)"
     ]
   }
 }

@@ -1,16 +1,34 @@
-# solarsense_ar
+# SolarSense AR
 
-A new Flutter project.
+Flutter app — AR rooftop scan → solar sizing → PDF report, **100% on-device**.
+No backend, no server, no internet required for the core flow (PVGIS
+irradiance is the one optional network call).
 
-## Getting Started
+## Run it
 
-This project is a starting point for a Flutter application.
+```
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+Works on Android emulator and any physical Android phone — nothing to
+configure. Build a release APK with:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```
+flutter build apk --release
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Install the APK → complete a scan → Report screen → **Download PDF Report**.
+The PDF is generated on the device using the `pdf` package and saved to
+the app's external-files directory, then opened in your default PDF viewer.
+
+## Project layout
+
+- `lib/` — Flutter app (AR camera, scan pipeline, PDF generator)
+- `lib/services/pdf_report_generator.dart` — on-device 16-section PDF
+- `lib/services/scan_orchestrator.dart` — on-device solar analysis
+- `assets/data/report_static_data.json` — PM Surya Ghar guide, provider
+  comparison, assumptions (bundled into the APK)
+- `report Module/` — **optional** Python FastAPI backend (same logic as
+  the on-device generator but with OpenAI-written narrative). Kept for
+  reference / server-side deployments. Not required by the app.
