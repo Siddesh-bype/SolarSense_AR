@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter --version)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(ls \"C:/AAA Projects/AR Module/SolarSense_AR/android/app/\"*.pro)"
+    ]
+  }
+}

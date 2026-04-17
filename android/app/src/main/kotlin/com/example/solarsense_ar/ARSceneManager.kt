@@ -1,9 +1,12 @@
 package com.example.solarsense_ar
 
 import android.Manifest
+import android.content.ComponentCallbacks2
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.opengl.GLSurfaceView
 import android.util.Log
+import android.view.Surface
 import android.view.View
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -44,7 +47,21 @@ class ARSceneManager(
 
     private val rootView      = FrameLayout(activity)
     private val glSurfaceView = GLSurfaceView(activity)
-    private val renderer      = ARRenderer(activity, ::onFrame)
+    private val renderer      = ARRenderer(activity, ::onFrame, ::currentDisplayRotation)
+
+    private fun currentDisplayRotation(): Int = try {
+        @Suppress("DEPRECATION")
+        activity.windowManager?.defaultDisplay?.rotation ?: Surface.ROTATION_0
+    } catch (_: Exception) { Surface.ROTATION_0 }
+
+    private val orientationCallback = object : ComponentCallbacks2 {
+        override fun onConfigurationChanged(newConfig: Configuration) {
+            Log.e(TAG, "Configuration changed: orientation=${newConfig.orientation}")
+            glSurfaceView.queueEvent { renderer.onDisplayRotationChanged() }
+        }
+        override fun onLowMemory() {}
+        override fun onTrimMemory(level: Int) {}
+    }
 
     private var session: Session? = null
     private var sessionCreated = false
@@ -59,6 +76,7 @@ class ARSceneManager(
         Log.e(TAG, "ARSceneManager.init")
         setupGLView()
         activity.lifecycle.addObserver(this)
+        activity.registerComponentCallbacks(orientationCallback)
         Log.e(TAG, "ARSceneManager.init -- complete")
     }
 
@@ -260,6 +278,7 @@ class ARSceneManager(
 
     override fun dispose() {
         activity.lifecycle.removeObserver(this)
+        try { activity.unregisterComponentCallbacks(orientationCallback) } catch (_: Exception) {}
         clearAnchors()
         try { glSurfaceView.onPause() } catch (_: Exception) {}
         session?.close(); session = null

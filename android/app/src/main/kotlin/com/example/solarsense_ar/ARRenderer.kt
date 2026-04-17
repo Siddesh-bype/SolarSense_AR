@@ -6,6 +6,7 @@ import android.opengl.Matrix
 import android.util.Log
 import android.view.Surface
 import com.google.ar.core.Anchor
+import com.google.ar.core.Coordinates2d
 import com.google.ar.core.Frame
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
@@ -18,6 +19,7 @@ import javax.microedition.khronos.opengles.GL10
 class ARRenderer(
     private val context: Context,
     private val onFrameCallback: (Frame) -> Unit,
+    private val rotationSupplier: () -> Int = { Surface.ROTATION_0 },
 ) : android.opengl.GLSurfaceView.Renderer {
 
     companion object {
@@ -38,6 +40,7 @@ class ARRenderer(
 
     private var viewportWidth = 0
     private var viewportHeight = 0
+    @Volatile private var pendingRotationUpdate = false
 
     private var bgProgram  = 0
     private var objProgram = 0
@@ -71,15 +74,25 @@ class ARRenderer(
         GLES20.glTexParameteri(OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST)
         GLES20.glTexParameteri(OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST)
         s.setCameraTextureName(cameraTexId[0])
-        
+
         // Critical: Apply viewport geometry because SurfaceChanged happens BEFORE session is created
         if (viewportWidth > 0 && viewportHeight > 0) {
-            s.setDisplayGeometry(Surface.ROTATION_0, viewportWidth, viewportHeight) // 0 = portrait
-            Log.e(TAG, "Applied session geometry inside initCameraTexture: ${viewportWidth}x${viewportHeight}")
+            val rot = rotationSupplier()
+            s.setDisplayGeometry(rot, viewportWidth, viewportHeight)
+            Log.e(TAG, "Applied session geometry inside initCameraTexture: rot=$rot ${viewportWidth}x${viewportHeight}")
         }
-        
+
         session = s
+        pendingRotationUpdate = true
         Log.e(TAG, "Camera texture bound: texId=${cameraTexId[0]}")
+    }
+
+    /** Called from UI thread when device orientation changes. */
+    fun onDisplayRotationChanged() {
+        pendingRotationUpdate = true
+        if (viewportWidth > 0 && viewportHeight > 0) {
+            session?.setDisplayGeometry(rotationSupplier(), viewportWidth, viewportHeight)
+        }
     }
 
     @Synchronized fun addAnchor(a: Anchor)      { anchors += a }
@@ -106,8 +119,10 @@ class ARRenderer(
         viewportWidth = w
         viewportHeight = h
         GLES20.glViewport(0, 0, w, h)
-        session?.setDisplayGeometry(Surface.ROTATION_0, w, h) // Update if already exists
-        Log.e(TAG, "onSurfaceChanged: ${w}x${h}")
+        val rot = rotationSupplier()
+        session?.setDisplayGeometry(rot, w, h) // Update if already exists
+        pendingRotationUpdate = true
+        Log.e(TAG, "onSurfaceChanged: rot=$rot ${w}x${h}")
     }
 
     override fun onDrawFrame(gl: GL10?) {
@@ -117,6 +132,19 @@ class ARRenderer(
         val frame = try { s.update() } catch (e: Exception) {
             Log.e(TAG, "session.update: ${e.message}")
             return
+        }
+
+        // Recompute camera-texture UVs whenever display geometry changes
+        // (rotation, surface resize, or first frame). ARCore computes UVs that
+        // correctly rotate/crop the sensor image for the current display orientation.
+        if (frame.hasDisplayGeometryChanged() || pendingRotationUpdate) {
+            frame.transformCoordinates2d(
+                Coordinates2d.OPENGL_NORMALIZED_DEVICE_COORDINATES,
+                quadCoordsBuffer,
+                Coordinates2d.TEXTURE_NORMALIZED,
+                quadUVsBuffer,
+            )
+            pendingRotationUpdate = false
         }
 
         drawBackground()
