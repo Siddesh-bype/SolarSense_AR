@@ -27,7 +27,19 @@ class MainActivity : FlutterFragmentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         Log.e(TAG, "Camera permission result: granted=$granted")
-        if (granted) arManagerRef?.onCameraPermissionGranted()
+        if (granted) {
+            arManagerRef?.onCameraPermissionGranted()
+        } else {
+            // Surface the denial to Flutter so the AR screen can render a
+            // fallback state instead of a frozen black camera view.
+            // `shouldShowRequestPermissionRationale` returns FALSE when the
+            // user selected "Don't ask again" (or the OS auto-denies), in
+            // which case we direct them to app settings.
+            val permanent = !shouldShowRequestPermissionRationale(
+                android.Manifest.permission.CAMERA,
+            )
+            arManagerRef?.onCameraPermissionDenied(permanent)
+        }
     }
 
     // Weak reference so ARSceneManager can receive the permission callback
@@ -61,6 +73,23 @@ class MainActivity : FlutterFragmentActivity() {
                         "removePanel"     -> { arSceneManager.removePanel(); result.success(null) }
                         "resetScan"       -> { arSceneManager.resetScan();   result.success(null) }
                         "getScanSnapshot" -> result.success(arSceneManager.getScanSnapshot())
+                        "configurePanelPose" -> {
+                            val tilt       = (call.argument<Double>("tiltDeg")     ?: 20.0).toFloat()
+                            val azimuth    = (call.argument<Double>("azimuthDeg")  ?: 180.0).toFloat()
+                            val elevation  = (call.argument<Double>("elevationM")  ?: 0.75).toFloat()
+                            arSceneManager.configurePanelPose(tilt, azimuth, elevation)
+                            result.success(null)
+                        }
+                        "openAppSettings" -> {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", packageName, null),
+                            ).apply {
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(null)
+                        }
                         else              -> result.notImplemented()
                     }
                 } catch (e: Exception) {

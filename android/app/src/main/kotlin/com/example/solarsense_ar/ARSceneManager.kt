@@ -70,6 +70,12 @@ class ARSceneManager(
     private val panelAnchors = mutableListOf<Anchor>()
     private var frameCount = 0
 
+    // Sun-path-driven placement — configured from Flutter before plane detection.
+    // Defaults ≈ central-India optimum (lat 20°) and 0.45 m (~1.5 ft) mounting height.
+    private var panelTiltDeg = 18.3f      // SunPath.optimalTiltDeg(20)
+    @Suppress("unused") private var panelAzimuthDeg = 180f
+    private var panelElevationM = 0.45f
+
     var eventSink: EventChannel.EventSink? = null
 
     init {
@@ -119,7 +125,29 @@ class ARSceneManager(
     /** Called from MainActivity when the user grants camera permission. */
     fun onCameraPermissionGranted() {
         Log.e(TAG, "onCameraPermissionGranted")
+        emitCameraPermission("granted", false)
         createSession()
+    }
+
+    /**
+     * Called from MainActivity when the user denies the camera permission.
+     * `permanent = true` means the user chose "Don't ask again" — a second
+     * in-app request will be ignored by the system, so Flutter should guide
+     * the user to Settings instead of re-prompting.
+     */
+    fun onCameraPermissionDenied(permanent: Boolean) {
+        Log.e(TAG, "onCameraPermissionDenied (permanent=$permanent)")
+        emitCameraPermission("denied", permanent)
+    }
+
+    private fun emitCameraPermission(status: String, permanent: Boolean) {
+        val sink = eventSink ?: return
+        try {
+            sink.success(mapOf(
+                "cameraPermission" to status,
+                "cameraPermissionPermanent" to permanent,
+            ))
+        } catch (_: Exception) {}
     }
 
     // ── Session ───────────────────────────────────────────────────────────────
@@ -230,18 +258,45 @@ class ARSceneManager(
         clearAnchors()
         currentPlane = plane
         val positions = PanelGridCalculator.calculate(plane, count)
-        Log.e(TAG, "placeGrid: ${positions.size} panels")
+        Log.e(TAG, "placeGrid: ${positions.size} panels @ tilt=${panelTiltDeg}° elev=${panelElevationM}m")
+
+        // Tilt quaternion: rotation around plane-local +X axis by panelTiltDeg.
+        // In the panel geometry (lying flat at y=0, corners at ±hw,0,±hh),
+        // a positive rotation about +X lifts the back edge (+z side) of the
+        // panel upward, producing a sun-facing tilted module on a flat roof.
+        val halfRad = Math.toRadians(panelTiltDeg.toDouble()) / 2.0
+        val qx = Math.sin(halfRad).toFloat()
+        val qw = Math.cos(halfRad).toFloat()
+        val tiltPose = Pose.makeRotation(qx, 0f, 0f, qw)
+
         for (pos in positions) {
             try {
-                val anchor = plane.createAnchor(
-                    plane.centerPose.compose(Pose.makeTranslation(pos.x, 0f, pos.z))
-                )
+                // 1. Translate in plane-local frame (plane Y = world up),
+                //    lifting the panel clear of the roof surface.
+                // 2. Compose tilt rotation after translation so it rotates
+                //    about the panel's own centre, not the plane origin.
+                val local = Pose.makeTranslation(pos.x, panelElevationM, pos.z)
+                    .compose(tiltPose)
+                val anchor = plane.createAnchor(plane.centerPose.compose(local))
                 panelAnchors += anchor
                 renderer.addAnchor(anchor)
             } catch (e: Exception) {
                 Log.e(TAG, "createAnchor: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Called from Flutter before plane detection to set the sun-path-optimal
+     * pose for every panel placed on this scan. Safe to call repeatedly —
+     * the next `placeGrid` picks the new values up. Values already placed
+     * stay where they are until `resetScan` is invoked.
+     */
+    fun configurePanelPose(tiltDeg: Float, azimuthDeg: Float, elevationM: Float) {
+        panelTiltDeg = tiltDeg.coerceIn(0f, 60f)
+        panelAzimuthDeg = azimuthDeg
+        panelElevationM = elevationM.coerceIn(0f, 2.5f)
+        Log.e(TAG, "configurePanelPose: tilt=${panelTiltDeg}° az=${panelAzimuthDeg}° elev=${panelElevationM}m")
     }
 
     private fun clearAnchors() {

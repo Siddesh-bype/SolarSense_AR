@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/solar/sun_path.dart';
+import '../../services/user_session.dart';
+
 // ── Channel constants ────────────────────────────────────────────────────────
 // All panel/area/system-kW values are produced by the native ARCore module
 // and streamed through _kEventCh. Nothing about panels is hardcoded here.
@@ -28,10 +31,38 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   double _areaSqm    = 0;
   bool   _planeFound = false;
 
+  // ── Camera permission ───────────────────────────────────────────────────
+  // null  → not yet known (assume granted-until-told-otherwise)
+  // 'granted' / 'denied' come from the native side via EventChannel.
+  String? _cameraPermission;
+  bool    _cameraPermissionPermanent = false;
+
   @override
   void initState() {
     super.initState();
     _kEventCh.receiveBroadcastStream().listen(_onArEvent, onError: (_) {});
+    _pushOptimalPose();
+  }
+
+  /// Pushes the sun-path-optimal tilt + mounting elevation to the native
+  /// AR side, so panels are placed elevated above the roof and tilted
+  /// toward the sun. Computed from the user's GPS latitude (fallback
+  /// latitude ≈ 20° when no GPS is available).
+  Future<void> _pushOptimalPose() async {
+    final lat = UserSession.instance.lat ?? 20.0; // fallback: central India
+    final tilt = SunPath.optimalTiltDeg(lat);
+    final azimuth = SunPath.optimalAzimuthDeg(lat);
+    try {
+      await _kMethodCh.invokeMethod('configurePanelPose', {
+        'tiltDeg': tilt,
+        'azimuthDeg': azimuth,
+        'elevationM': SunPath.mountingElevationM,
+        'latitude': lat,
+      });
+    } catch (_) {
+      // Native side may not be ready yet — plane detection will still
+      // fall back to flat-on-ground placement if this call is dropped.
+    }
   }
 
   void _onArEvent(dynamic event) {
@@ -42,7 +73,25 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
         _systemKw   = (event['systemKw']   as double?) ?? _systemKw;
         _areaSqm    = (event['areaSqm']    as double?) ?? _areaSqm;
         _planeFound = (event['planeFound'] as bool?)  ?? _planeFound;
+
+        // Permission events are emitted on grant/deny only — absent keys
+        // mean this is a normal HUD frame.
+        final permStatus = event['cameraPermission'] as String?;
+        if (permStatus != null) {
+          _cameraPermission = permStatus;
+          _cameraPermissionPermanent =
+              (event['cameraPermissionPermanent'] as bool?) ?? false;
+        }
       });
+    }
+  }
+
+  Future<void> _openAppSettings() async {
+    try {
+      await _kMethodCh.invokeMethod('openAppSettings');
+    } catch (_) {
+      // If the native shortcut fails the user can still reach settings via
+      // the OS launcher — nothing sensible we can do here.
     }
   }
 
@@ -114,8 +163,18 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
           ),
 
           // ── Layer 2: "Point phone at surface" hint (before plane detected) ─
-          if (!_planeFound)
+          if (!_planeFound && _cameraPermission != 'denied')
             const Positioned.fill(child: _PlaneHint()),
+
+          // ── Layer 2b: Camera permission denied fallback ──────────────────
+          if (_cameraPermission == 'denied')
+            Positioned.fill(
+              child: _PermissionDeniedOverlay(
+                permanent: _cameraPermissionPermanent,
+                onOpenSettings: _openAppSettings,
+                onBack: () => Navigator.pop(context),
+              ),
+            ),
 
           // ── Layer 3: Top HUD ─────────────────────────────────────────────
           Positioned(
@@ -497,6 +556,81 @@ class _BarAction extends StatelessWidget {
                 color: Colors.white60, fontSize: 9,
                 fontWeight: FontWeight.bold, letterSpacing: 1.2)),
       ]),
+    );
+  }
+}
+
+class _PermissionDeniedOverlay extends StatelessWidget {
+  final bool permanent;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onBack;
+
+  const _PermissionDeniedOverlay({
+    required this.permanent,
+    required this.onOpenSettings,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = permanent
+        ? 'Camera access is turned off'
+        : 'Camera access required';
+    final body = permanent
+        ? 'You previously blocked the camera for SolarSense. '
+          'Enable Camera under App permissions to run the AR scan.'
+        : 'The AR scan uses your phone camera to measure the rooftop. '
+          'Grant camera access to continue.';
+    return Container(
+      color: Colors.black.withValues(alpha: 0.92),
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.no_photography_outlined,
+                color: Colors.orangeAccent, size: 64),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: GoogleFonts.manrope(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              body,
+              style: GoogleFonts.inter(color: Colors.white70, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onOpenSettings,
+              icon: const Icon(Icons.settings),
+              label: const Text('Open app settings'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFf97316),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 28, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: onBack,
+              child: const Text(
+                'Go back',
+                style: TextStyle(color: Colors.white60),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

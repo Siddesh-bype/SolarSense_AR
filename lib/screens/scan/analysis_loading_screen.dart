@@ -75,27 +75,62 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
       // ── Step 2: PVGIS + obstacle detection (concurrent inside orchestrator) ─
       _setStep(1, 0.35);
 
-      // Tariff: user override, else derive from monthly bill (assume ~100 kWh
-      // per ₹ spent isn't right — safer fallback is state-average ₹8.5/kWh,
-      // but we let subsidy_service's state data fill that in if user skipped).
-      final avgTariff = _session.avgTariffInr ?? 8.5;
+      // Tariff: prefer the user's explicit override, else let SubsidyService
+      // fall back to the state-average from state_subsidies.json (pass 0).
+      final avgTariff = _session.avgTariffInr ?? 0;
 
-      // Usable roof area: AR gives total detected area; ~75% is usable for
-      // panels after setbacks/obstacles.
-      final usableAreaM2 = areaSqm * 0.75;
+      // Usable-area ratio depends on the roof profile: flat roofs lose the
+      // least to setbacks/ridge-shading, sloped roofs lose the most.
+      //   Flat   → 0.78   (parapet setback only)
+      //   Sloped → 0.60   (south/east/west facets, ridge line, eaves)
+      //   Mixed  → 0.68   (blended)
+      final roofType = _session.roofType;
+      final usableRatio = switch (roofType) {
+        'Flat'   => 0.78,
+        'Sloped' => 0.60,
+        'Mixed'  => 0.68,
+        _        => 0.70, // unknown → conservative
+      };
 
-      final EnrichedScanResult result = await _orchestrator.enrichScan(
+      // If the user entered a roof area AND it's smaller than what AR saw
+      // (e.g. AR picked up neighbouring rooftops too), trust the user.
+      final userAreaM2 = _session.roofAreaSqFt != null
+          ? _session.roofAreaSqFt! * 0.092903 // sq ft → m²
+          : null;
+      final effectiveTotalArea = (userAreaM2 != null && userAreaM2 < areaSqm)
+          ? userAreaM2
+          : areaSqm;
+      final usableAreaM2 = effectiveTotalArea * usableRatio;
+
+      // Map monthly-bill → price-sensitivity band so brand recommendations
+      // actually reflect the user's budget instead of always defaulting to 'mid'.
+      final monthlyBill = _session.monthlyBillInr ?? 0;
+      final priceSensitivity = monthlyBill < 1500
+          ? 'budget'
+          : (monthlyBill > 4000 ? 'premium' : 'mid');
+
+      EnrichedScanResult result = await _orchestrator.enrichScan(
         lat: lat,
         lon: lon,
         systemKw: systemKw,
         stateName: _session.stateKey!,
-        totalAreaM2: areaSqm,
+        totalAreaM2: effectiveTotalArea,
         usableAreaM2: usableAreaM2,
         panelCount: panelCount,
         avgTariff: avgTariff,
-        priceSensitivity: 'mid',
+        priceSensitivity: priceSensitivity,
         cameraFrame: null,
       );
+
+      // Sanity-cap annual savings: a rooftop system cannot save more than
+      // the user's current yearly electricity spend. Without this, PVGIS
+      // over-production on oversized scans produces unbelievable numbers.
+      if (monthlyBill > 0) {
+        final maxAnnualSavings = monthlyBill * 12.0;
+        if (result.annualSavingsInr > maxAnnualSavings) {
+          result = _capSavings(result, maxAnnualSavings);
+        }
+      }
 
       // ── Step 3: Subsidy + brands resolved (already done inside orchestrator) ─
       _setStep(2, 0.70);
@@ -124,6 +159,37 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
       _currentStep = step;
       _progress = progress;
     });
+  }
+
+  /// Returns a copy of `r` where `annualSavingsInr` is clamped to `maxSavings`
+  /// and the payback years is recomputed against the new savings figure.
+  /// Called when PVGIS-predicted savings exceed the user's actual annual bill.
+  EnrichedScanResult _capSavings(EnrichedScanResult r, double maxSavings) {
+    final capped = double.parse(maxSavings.toStringAsFixed(2));
+    final newPayback = capped > 0
+        ? double.parse((r.netCost / capped).toStringAsFixed(2))
+        : r.paybackYears;
+    return EnrichedScanResult(
+      totalAreaM2: r.totalAreaM2,
+      usableAreaM2: r.usableAreaM2,
+      panelCount: r.panelCount,
+      systemSizeKw: r.systemSizeKw,
+      peakSunHours: r.peakSunHours,
+      pvgisFallback: r.pvgisFallback,
+      annualKwh: r.annualKwh,
+      centralSubsidy: r.centralSubsidy,
+      stateSubsidy: r.stateSubsidy,
+      totalSubsidy: r.totalSubsidy,
+      estimatedCost: r.estimatedCost,
+      netCost: r.netCost,
+      paybackYears: newPayback,
+      annualSavingsInr: capped,
+      stateDisplayName: r.stateDisplayName,
+      statePortal: r.statePortal,
+      stateNotes: r.stateNotes,
+      brandRecommendations: r.brandRecommendations,
+      detectedObstacles: r.detectedObstacles,
+    );
   }
 
   @override

@@ -65,6 +65,24 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
     try {
       final loc = await _locationService.getCurrentLatLon();
       _session.updateScanInputs(lat: loc.lat, lon: loc.lon);
+
+      // Reverse-geocode (free, OpenStreetMap Nominatim) so the user doesn't
+      // have to type the city / pick the state manually. On any failure we
+      // just leave the fields as-is — the raw lat/lon is already locked.
+      final place = await _locationService.reverseGeocode(loc.lat, loc.lon);
+      if (!mounted) return;
+      if (place != null) {
+        if (place.city != null && place.city!.isNotEmpty) {
+          _cityCtrl.text = place.city!;
+        }
+        if (place.stateKey != null && _kStates.containsKey(place.stateKey)) {
+          _stateKey = place.stateKey;
+        }
+        _session.updateScanInputs(
+          city: place.city,
+          stateKey: place.stateKey,
+        );
+      }
     } catch (_) {
       setState(() => _error = 'Could not get GPS. Enter location manually.');
     } finally {

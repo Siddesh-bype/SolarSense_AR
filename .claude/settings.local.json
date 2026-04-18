@@ -11,7 +11,10 @@
       "Bash(npm list *)",
       "Bash(npm install *)",
       "Bash(node -e \"console.log\\(require.resolve\\('docx'\\)\\)\")",
-      "Bash(npm root *)"
+      "Bash(npm root *)",
+      "Bash(xargs grep *)",
+      "Bash(xargs ls *)",
+      "Bash(flutter test *)"
     ]
   }
 }
