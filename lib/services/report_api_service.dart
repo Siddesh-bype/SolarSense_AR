@@ -22,7 +22,7 @@ class ReportApiService {
     final reportId =
         'REP${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}';
     final dir = await _downloadDir();
-    final filePath = '${dir.path}/SolarSense_Report_$reportId.pdf';
+    final filePath = '${dir.path}/SolarMitra_Report_$reportId.pdf';
     final file = File(filePath);
     await file.writeAsBytes(bytes, flush: true);
     return filePath;

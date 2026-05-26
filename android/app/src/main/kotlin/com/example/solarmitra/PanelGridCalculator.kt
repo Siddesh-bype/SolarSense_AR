@@ -1,4 +1,4 @@
-package com.example.solarsense_ar
+package com.example.solarmitra
 
 import com.google.ar.core.Plane
 

@@ -4,8 +4,8 @@
 // The helper is a pure function on ObstacleDetection boxes (centre-xywh).
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solarsense_ar/models/obstacle_detection.dart';
-import 'package:solarsense_ar/services/obstacle_service.dart';
+import 'package:solarmitra/models/obstacle_detection.dart';
+import 'package:solarmitra/services/obstacle_service.dart';
 
 ObstacleDetection _box({
   required double cx,

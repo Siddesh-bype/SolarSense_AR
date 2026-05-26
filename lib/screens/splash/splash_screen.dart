@@ -53,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       _buildAnimatedIcon(),
                       const SizedBox(height: 24),
                       const Text(
-                        'SolarSense AR',
+                        'SolarMitra',
                         style: TextStyle(color: AppColors.navy, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5),
                       ),
                       const Text(

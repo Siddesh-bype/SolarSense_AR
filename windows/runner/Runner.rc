@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "solarsense_ar" "\0"
+            VALUE "FileDescription", "solarmitra" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "solarsense_ar" "\0"
+            VALUE "InternalName", "solarmitra" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "solarsense_ar.exe" "\0"
-            VALUE "ProductName", "solarsense_ar" "\0"
+            VALUE "OriginalFilename", "solarmitra.exe" "\0"
+            VALUE "ProductName", "solarmitra" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

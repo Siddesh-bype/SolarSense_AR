@@ -1,4 +1,4 @@
-# **SolarSense AR**
+# **SolarMitra**
 
 ### Solar Providers, Brand Comparison & PM Surya Ghar Yojana
 
@@ -179,7 +179,7 @@ small residential systems and individual panel purchases.
 ## **Brand Quick Comparison Table**
 
 
-Use this table to compare all major brands side by side for your SolarSense AR app's provider page.
+Use this table to compare all major brands side by side for your SolarMitra app's provider page.
 
 
 
@@ -447,7 +447,7 @@ rates for PM Surya Ghar applicants. No collateral required for loans up to ₹1 
 |Status Check|pmsuryaghar.gov.in/status|Track application and subsidy<br>status|
 
 
-Document prepared for SolarSense AR — Tech Pirates — Resonance 2K26 | April 2026
+Document prepared for SolarMitra — Tech Pirates — Resonance 2K26 | April 2026
 Prices and subsidy rates are indicative and subject to change. Always verify at pmsuryaghar.gov.in before use.
 
 

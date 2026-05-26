@@ -89,7 +89,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    'SolarSense AR',
+                    'SolarMitra',
                     style: GoogleFonts.manrope(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.onSurface),
                   ),
                 ],

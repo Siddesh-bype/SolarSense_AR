@@ -15,16 +15,16 @@ import 'screens/profile/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SolarSenseApp());
+  runApp(const SolarMitraApp());
 }
 
-class SolarSenseApp extends StatelessWidget {
-  const SolarSenseApp({super.key});
+class SolarMitraApp extends StatelessWidget {
+  const SolarMitraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SolarSense AR',
+      title: 'SolarMitra',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       initialRoute: '/',

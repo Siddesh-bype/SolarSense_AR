@@ -84,10 +84,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       await _download(data);
       final p = _lastPdfPath;
       if (p == null) return;
-      await Share.shareXFiles([XFile(p)], text: 'My SolarSense AR report');
+      await Share.shareXFiles([XFile(p)], text: 'My SolarMitra report');
       return;
     }
-    await Share.shareXFiles([XFile(path)], text: 'My SolarSense AR report');
+    await Share.shareXFiles([XFile(path)], text: 'My SolarMitra report');
   }
 
   String _friendly(Object e) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # -------------------------------------------------------------------
-# SolarSense AR — Report Module press-and-play launcher (Mac/Linux)
+# SolarMitra — Report Module press-and-play launcher (Mac/Linux)
 # -------------------------------------------------------------------
 set -e
 cd "$(dirname "$0")"
@@ -22,7 +22,7 @@ LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{p
 
 echo
 echo "==================================================================="
-echo " SolarSense AR - Report API"
+echo " SolarMitra - Report API"
 echo "==================================================================="
 [ -n "$LAN_IP" ] && echo " LAN URL for physical phone:  http://$LAN_IP:8000"
 echo " Android emulator URL:        http://10.0.2.2:8000"

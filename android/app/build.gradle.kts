@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.solarsense_ar"
+    namespace = "com.example.solarmitra"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.solarsense_ar"
+        applicationId = "com.example.solarmitra"
         minSdk = 26      // tflite_flutter requires 26; arsceneview needs >=24
         targetSdk = 36
         versionCode = flutter.versionCode

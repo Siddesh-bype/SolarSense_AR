@@ -12,9 +12,9 @@ import '../../services/user_session.dart';
 // ── Channel constants ────────────────────────────────────────────────────────
 // All panel/area/system-kW values are produced by the native ARCore module
 // and streamed through _kEventCh. Nothing about panels is hardcoded here.
-const _kViewType = 'com.solarsense.ar/scene';
-const _kMethodCh = MethodChannel('com.solarsense.ar/channel');
-const _kEventCh  = EventChannel('com.solarsense.ar/events');
+const _kViewType = 'com.solarmitra/scene';
+const _kMethodCh = MethodChannel('com.solarmitra/channel');
+const _kEventCh  = EventChannel('com.solarmitra/events');
 
 class ARCameraScreen extends StatefulWidget {
   const ARCameraScreen({super.key});
@@ -299,7 +299,7 @@ class _TopBar extends StatelessWidget {
         children: [
           _GlassBtn(icon: Icons.arrow_back, onTap: onBack),
           Column(children: [
-            Text('SolarSense AR',
+            Text('SolarMitra',
                 style: GoogleFonts.manrope(
                     color: Colors.white,
                     fontSize: 17,
@@ -577,7 +577,7 @@ class _PermissionDeniedOverlay extends StatelessWidget {
         ? 'Camera access is turned off'
         : 'Camera access required';
     final body = permanent
-        ? 'You previously blocked the camera for SolarSense. '
+        ? 'You previously blocked the camera for SolarMitra. '
           'Enable Camera under App permissions to run the AR scan.'
         : 'The AR scan uses your phone camera to measure the rooftop. '
           'Grant camera access to continue.';

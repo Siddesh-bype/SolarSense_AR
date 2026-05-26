@@ -1,6 +1,6 @@
 @echo off
 REM -------------------------------------------------------------------
-REM SolarSense AR — Report Module press-and-play launcher (Windows)
+REM SolarMitra — Report Module press-and-play launcher (Windows)
 REM
 REM   * Creates venv if missing
 REM   * Installs requirements (first run only)
@@ -38,7 +38,7 @@ if not exist "venv\Scripts\python.exe" (
 
 echo.
 echo ===================================================================
-echo  SolarSense AR - Report API
+echo  SolarMitra - Report API
 echo ===================================================================
 echo.
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (

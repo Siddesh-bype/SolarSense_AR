@@ -82,7 +82,7 @@ class LocationService {
         uri,
         headers: {
           // Nominatim requires an identifying UA — rejects bare defaults.
-          'User-Agent': 'SolarSenseAR/1.0 (contact: support@solarsense.app)',
+          'User-Agent': 'SolarMitra/1.0 (contact: support@solarmitra.app)',
           'Accept': 'application/json',
         },
       ).timeout(_kGeoTimeout);

@@ -1,4 +1,4 @@
-# SolarSense AR - Report API
+# SolarMitra - Report API
 
 FastAPI wrapper around the existing `report_generator.py`. Data is split into
 two JSON sources:

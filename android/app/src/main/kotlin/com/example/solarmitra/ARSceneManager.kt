@@ -1,4 +1,4 @@
-package com.example.solarsense_ar
+package com.example.solarmitra
 
 import android.Manifest
 import android.content.ComponentCallbacks2
@@ -42,7 +42,7 @@ class ARSceneManager(
 ) : PlatformView, DefaultLifecycleObserver {
 
     companion object {
-        private const val TAG = "SolarSenseAR"
+        private const val TAG = "SolarMitra"
     }
 
     private val rootView      = FrameLayout(activity)

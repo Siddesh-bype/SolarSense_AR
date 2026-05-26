@@ -384,7 +384,7 @@
   },
 
   "disclaimer": {
-    "text": "This report is generated based on estimated values from AR scanning, user inputs, and publicly available solar irradiance data. Actual performance may vary depending on weather conditions, shading, panel orientation, installation quality, and local grid policies. A professional on-site survey is strongly recommended before making a purchase decision. SolarSense AR does not guarantee financial returns or subsidy approval."
+    "text": "This report is generated based on estimated values from AR scanning, user inputs, and publicly available solar irradiance data. Actual performance may vary depending on weather conditions, shading, panel orientation, installation quality, and local grid policies. A professional on-site survey is strongly recommended before making a purchase decision. SolarMitra does not guarantee financial returns or subsidy approval."
   },
 
   "contact": {
@@ -401,9 +401,9 @@
   },
 
   "report_metadata": {
-    "generated_by": "SolarSense Report Engine v1.0",
+    "generated_by": "SolarMitra Report Engine v1.0",
     "version": "1.0",
     "report_format": "PDF",
-    "project_name": "SolarSense AR"
+    "project_name": "SolarMitra"
   }
 }

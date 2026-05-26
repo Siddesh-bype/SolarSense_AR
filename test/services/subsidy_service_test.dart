@@ -5,7 +5,7 @@
 // state-top-up lookup path.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solarsense_ar/services/subsidy_service.dart';
+import 'package:solarmitra/services/subsidy_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

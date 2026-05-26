@@ -1,4 +1,4 @@
-package com.example.solarsense_ar
+package com.example.solarmitra
 
 import android.content.Context
 import android.opengl.GLES20
@@ -23,7 +23,7 @@ class ARRenderer(
 ) : android.opengl.GLSurfaceView.Renderer {
 
     companion object {
-        private const val TAG = "SolarSenseAR"
+        private const val TAG = "SolarMitra"
         private val PANEL_COLOR = floatArrayOf(0.09f, 0.18f, 0.42f, 0.88f)
         private val FRAME_COLOR = floatArrayOf(0.80f, 0.80f, 0.80f, 1.00f)
         private val GRID_COLOR  = floatArrayOf(0.20f, 0.60f, 1.00f, 0.35f)

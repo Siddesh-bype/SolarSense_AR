@@ -1,5 +1,5 @@
 """
-SolarSense AR - AI Content Generator
+SolarMitra - AI Content Generator
 Generates human-sounding explanatory paragraphs for each report section
 using OpenAI API. Each section gets a tailored system prompt and receives
 the actual user data so the text references real numbers.
@@ -25,7 +25,7 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Deployment bundles on Vercel etc. are read-only; fall back to the system
 # temp dir so the cache writes don't blow up the whole AI step.
 if os.environ.get("VERCEL") or not os.access(_BASE_DIR, os.W_OK):
-    CACHE_DIR = os.path.join(tempfile.gettempdir(), "solarsense_ai_cache")
+    CACHE_DIR = os.path.join(tempfile.gettempdir(), "solarmitra_ai_cache")
 else:
     CACHE_DIR = os.path.join(_BASE_DIR, "output", ".ai_cache")
 

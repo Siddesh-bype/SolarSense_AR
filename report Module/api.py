@@ -1,5 +1,5 @@
 """
-SolarSense AR - FastAPI Backend
+SolarMitra - FastAPI Backend
 Accepts dynamic report data as JSON, merges it with server-stored static
 reference data (static_data.json), then invokes the existing
 report_generator.generate_report() to produce a PDF.
@@ -33,14 +33,14 @@ STATIC_DATA_PATH = os.path.join(BASE_DIR, "static_data.json")
 # next to the source.
 _default_output = os.path.join(BASE_DIR, "output")
 if os.environ.get("VERCEL") or not os.access(BASE_DIR, os.W_OK):
-    OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "solarsense_output")
+    OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "solarmitra_output")
 else:
     OUTPUT_DIR = _default_output
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 app = FastAPI(
-    title="SolarSense AR - Report API",
+    title="SolarMitra - Report API",
     description=(
         "Generates a professional PDF solar assessment report. Clients POST "
         "the dynamic user-specific payload; the server merges it with stored "
@@ -111,7 +111,7 @@ def write_merged_json(merged: Dict[str, Any]) -> str:
     the merged document to a unique temporary file per request.
     """
     fd, path = tempfile.mkstemp(
-        prefix="solarsense_req_",
+        prefix="solarmitra_req_",
         suffix=".json",
         dir=OUTPUT_DIR,
     )
@@ -126,7 +126,7 @@ def write_merged_json(merged: Dict[str, Any]) -> str:
 @app.get("/")
 def root():
     return {
-        "service": "SolarSense AR - Report API",
+        "service": "SolarMitra - Report API",
         "version": "1.0.0",
         "endpoints": {
             "GET /health": "Liveness probe",
@@ -166,7 +166,7 @@ def generate_report_endpoint(payload: Dict[str, Any] = Body(...)):
     merged_path = write_merged_json(merged)
 
     report_id = payload.get("report_id") or f"REP{uuid.uuid4().hex[:8].upper()}"
-    output_pdf = os.path.join(OUTPUT_DIR, f"SolarSense_Report_{report_id}.pdf")
+    output_pdf = os.path.join(OUTPUT_DIR, f"SolarMitra_Report_{report_id}.pdf")
 
     try:
         generate_report(merged_path, output_pdf)
@@ -209,7 +209,7 @@ def generate_report_json_endpoint(payload: Dict[str, Any] = Body(...)):
     merged_path = write_merged_json(merged)
 
     report_id = payload.get("report_id") or f"REP{uuid.uuid4().hex[:8].upper()}"
-    output_pdf = os.path.join(OUTPUT_DIR, f"SolarSense_Report_{report_id}.pdf")
+    output_pdf = os.path.join(OUTPUT_DIR, f"SolarMitra_Report_{report_id}.pdf")
 
     try:
         generate_report(merged_path, output_pdf)

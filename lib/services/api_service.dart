@@ -1,6 +1,6 @@
 // lib/services/api_service.dart
 //
-// Centralized API service for all SolarSense AR backend calls.
+// Centralized API service for all SolarMitra backend calls.
 // Swap _baseUrl to your ngrok URL for demo.
 
 import 'dart:convert';

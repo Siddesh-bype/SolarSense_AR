@@ -29,7 +29,7 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'SOLARSENSE AR', 
+          'SOLARMITRA',
           style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, letterSpacing: 1.2, fontSize: 18)
         ),
         actions: [
@@ -111,7 +111,7 @@ class ProfileScreen extends StatelessWidget {
             // Footer
             const Column(
               children: [
-                Text('SOLARSENSE AR PREMIUM', style: TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 2.0)),
+                Text('SOLARMITRA PREMIUM', style: TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 2.0)),
                 SizedBox(height: 4),
                 Text('v1.0.0', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
               ],

@@ -1,4 +1,4 @@
-package com.example.solarsense_ar
+package com.example.solarmitra
 
 import android.util.Log
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -15,10 +15,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 class MainActivity : FlutterFragmentActivity() {
 
     companion object {
-        private const val TAG       = "SolarSenseAR"
-        private const val VIEW_TYPE = "com.solarsense.ar/scene"
-        private const val METHOD_CH = "com.solarsense.ar/channel"
-        private const val EVENT_CH  = "com.solarsense.ar/events"
+        private const val TAG       = "SolarMitra"
+        private const val VIEW_TYPE = "com.solarmitra/scene"
+        private const val METHOD_CH = "com.solarmitra/channel"
+        private const val EVENT_CH  = "com.solarmitra/events"
     }
 
     // Register BEFORE Activity reaches STARTED state (AndroidX constraint).

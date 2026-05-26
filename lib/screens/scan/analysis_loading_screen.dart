@@ -224,7 +224,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
                         children: [
                           const Icon(Icons.solar_power, color: Colors.orange, size: 28),
                           const SizedBox(width: 8),
-                          Text('SOLARSENSE AR', style: GoogleFonts.manrope(fontWeight: FontWeight.w800, color: Colors.orange, fontSize: 18, letterSpacing: 1.2)),
+                          Text('SOLARMITRA', style: GoogleFonts.manrope(fontWeight: FontWeight.w800, color: Colors.orange, fontSize: 18, letterSpacing: 1.2)),
                         ],
                       ),
                       Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blueGrey.shade800.withValues(alpha: 0.5), shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white54, size: 20))
