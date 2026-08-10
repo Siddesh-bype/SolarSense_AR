@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/user_session.dart';
 import '../../widgets/primary_button.dart';
@@ -67,55 +66,98 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: c.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Abstract Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryContainer.withOpacity(0.1),
+                      color: c.primarySoft,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.wb_sunny_rounded, size: 32, color: AppColors.primaryContainer),
+                    child: const Icon(
+                      Icons.wb_sunny_rounded,
+                      size: 26,
+                      color: AppColors.primaryDeep,
+                    ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Text(
                     'SolarMitra',
-                    style: GoogleFonts.manrope(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.onSurface),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: c.onSurface,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 56),
+              const SizedBox(height: 44),
+              Text(
+                isLogin ? 'Welcome back' : 'Create your account',
+                style: theme.textTheme.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: c.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isLogin
+                    ? 'Sign in to continue your solar journey'
+                    : 'Start unlocking your rooftop potential',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: c.onSurfaceMuted,
+                ),
+              ),
+              const SizedBox(height: 28),
 
-              // Custom Pill Tabs
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: c.surfaceMuted,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.all(4),
                 child: Row(
                   children: [
-                    Expanded(child: _buildTab('Login', isLogin, () => setState(() { isLogin = true; _error = null; }))),
-                    Expanded(child: _buildTab('Register', !isLogin, () => setState(() { isLogin = false; _error = null; }))),
+                    Expanded(
+                      child: _buildTab(
+                        'Login',
+                        isLogin,
+                        () => setState(() {
+                          isLogin = true;
+                          _error = null;
+                        }),
+                        c,
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildTab(
+                        'Register',
+                        !isLogin,
+                        () => setState(() {
+                          isLogin = false;
+                          _error = null;
+                        }),
+                        c,
+                      ),
+                    ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
-              // Forms
               if (!isLogin) ...[
-                _buildFieldLabel('Full Name'),
+                _buildFieldLabel('Full Name', c),
                 CustomTextField(
                   controller: _nameCtrl,
                   hintText: 'Your name',
@@ -124,7 +166,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 const SizedBox(height: 20),
               ],
 
-              _buildFieldLabel('Email Address'),
+              _buildFieldLabel('Email Address', c),
               CustomTextField(
                 controller: _emailCtrl,
                 hintText: 'you@example.com',
@@ -133,7 +175,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
               ),
               const SizedBox(height: 20),
 
-              _buildFieldLabel('Password'),
+              _buildFieldLabel('Password', c),
               CustomTextField(
                 controller: _passwordCtrl,
                 hintText: '••••••••',
@@ -141,16 +183,19 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 obscureText: obscurePassword,
                 suffixIcon: IconButton(
                   icon: Icon(
-                    obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: AppColors.secondary,
+                    obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: c.onSurfaceMuted,
                   ),
-                  onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                  onPressed: () =>
+                      setState(() => obscurePassword = !obscurePassword),
                 ),
               ),
 
               if (!isLogin) ...[
                 const SizedBox(height: 20),
-                _buildFieldLabel('Confirm Password'),
+                _buildFieldLabel('Confirm Password', c),
                 CustomTextField(
                   controller: _confirmCtrl,
                   hintText: '••••••••',
@@ -160,24 +205,42 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
               ],
 
               if (isLogin) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {},
-                    child: Text('Forgot Password?', style: GoogleFonts.inter(color: AppColors.primaryContainer, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Forgot Password?',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: AppColors.primaryDeep,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
               ] else ...[
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
               ],
 
               if (_error != null) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: c.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: c.error.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: theme.textTheme.bodySmall?.copyWith(color: c.error),
+                  ),
                 ),
+                const SizedBox(height: 16),
               ],
 
               PrimaryButton(
@@ -185,29 +248,38 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                 onPressed: _submit,
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               Row(
                 children: [
-                  const Expanded(child: Divider(color: AppColors.outlineVariant)),
+                  const Expanded(child: Divider()),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('OR', style: GoogleFonts.inter(color: AppColors.secondary, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      'OR',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: c.onSurfaceMuted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  const Expanded(child: Divider(color: AppColors.outlineVariant)),
+                  const Expanded(child: Divider()),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
               SecondaryButton(
                 text: 'Continue with Google',
                 onPressed: () {},
+                icon: const Icon(Icons.g_mobiledata, size: 24),
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 40),
               Text(
                 'By continuing you agree to our Terms & Privacy Policy',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.secondary),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: c.onSurfaceMuted,
+                ),
               ),
             ],
           ),
@@ -216,36 +288,47 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
     );
   }
 
-  Widget _buildFieldLabel(String text) {
+  Widget _buildFieldLabel(String text, SolarPalette c) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
         text,
-        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.onSurface),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: c.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
   }
 
-  Widget _buildTab(String title, bool isActive, VoidCallback onTap) {
+  Widget _buildTab(
+      String title, bool isActive, VoidCallback onTap, SolarPalette c) {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))] : [],
+          color: isActive ? c.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
         ),
         child: Center(
           child: Text(
             title,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-              color: isActive ? AppColors.onSurface : AppColors.secondary,
-            ),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                  color: isActive ? c.onSurface : c.onSurfaceMuted,
+                ),
           ),
         ),
       ),

@@ -13,36 +13,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<Map<String, String>> _slides = [
+  final List<Map<String, dynamic>> _slides = [
     {
-      "title": "See Before You Install",
-      "subtitle": "Point your camera at any rooftop and see exactly how solar panels will look — in real life.",
-      "icon": "home_work_outlined",
+      "title": "See before you install",
+      "subtitle": "Point your camera at any rooftop and watch solar panels appear exactly where they'd sit.",
+      "icon": Icons.home_work_outlined,
     },
     {
-      "title": "AI-Powered Analysis",
-      "subtitle": "Get energy generation estimates, shadow analysis, and obstacle detection — automatically.",
-      "icon": "phone_android",
+      "title": "Smart analysis, on-device",
+      "subtitle": "Generation estimates, shadow, and obstacle detection — computed right on your phone.",
+      "icon": Icons.auto_awesome,
     },
     {
-      "title": "Know Your Savings",
-      "subtitle": "Instant cost breakdown, PM Surya Ghar subsidy (up to ₹78,000), and 25-year savings report.",
-      "icon": "request_quote_outlined",
+      "title": "Know your savings",
+      "subtitle": "Instant cost breakdown, PM Surya Ghar subsidy up to ₹78,000, and a 25-year savings report.",
+      "icon": Icons.request_quote_outlined,
     },
   ];
 
-  IconData _getIconData(String name) {
-    switch (name) {
-      case 'home_work_outlined': return Icons.home_work_outlined;
-      case 'phone_android': return Icons.phone_android;
-      case 'request_quote_outlined': return Icons.request_quote_outlined;
-      default: return Icons.star;
-    }
-  }
-
   void _nextPage() {
     if (_currentPage < _slides.length - 1) {
-      _pageController.nextPage(duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
     } else {
       Navigator.pushReplacementNamed(context, '/auth');
     }
@@ -56,16 +50,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: c.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        automaticallyImplyLeading: false,
         actions: [
           TextButton(
             onPressed: () => Navigator.pushReplacementNamed(context, '/auth'),
-            child: Text('Skip', style: GoogleFonts.inter(color: AppColors.secondary, fontWeight: FontWeight.w600)),
+            child: Text(
+              'Skip',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: c.onSurfaceMuted,
+              ),
+            ),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -74,30 +75,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                onPageChanged: (int page) {
-                  setState(() => _currentPage = page);
-                },
+                onPageChanged: (int page) =>
+                    setState(() => _currentPage = page),
                 itemCount: _slides.length,
                 itemBuilder: (context, index) {
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Expanded(
+                          flex: 3,
                           child: Container(
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              color: AppColors.primaryContainer.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(32),
-                              border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                _getIconData(_slides[index]["icon"]!),
-                                size: 100,
-                                color: AppColors.primaryContainer,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  c.primarySoft,
+                                  c.surface,
+                                ],
                               ),
+                              borderRadius: BorderRadius.circular(32),
+                              border: Border.all(color: c.border),
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Positioned(
+                                  top: 24,
+                                  right: 24,
+                                  child: Icon(
+                                    Icons.wb_sunny_rounded,
+                                    color: c.gold.withValues(alpha: 0.35),
+                                    size: 40,
+                                  ),
+                                ),
+                                Container(
+                                  width: 128,
+                                  height: 128,
+                                  decoration: BoxDecoration(
+                                    color: c.surface,
+                                    borderRadius: BorderRadius.circular(36),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: c.primary.withValues(alpha: 0.15),
+                                        blurRadius: 30,
+                                        offset: const Offset(0, 12),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(_slides[index]["icon"],
+                                      size: 64, color: c.primary),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -105,20 +137,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Text(
                           _slides[index]["title"]!,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.manrope(
-                            fontSize: 32,
+                          style: theme.textTheme.displaySmall?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: AppColors.onSurface,
-                            height: 1.2,
+                            color: c.onSurface,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         Text(
                           _slides[index]["subtitle"]!,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: AppColors.secondary,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: c.onSurfaceMuted,
                             height: 1.6,
                           ),
                         ),
@@ -129,37 +158,49 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(32.0),
+              padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _slides.length,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
+                    children: List.generate(_slides.length, (index) {
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOut,
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         height: 6,
                         width: _currentPage == index ? 24 : 6,
                         decoration: BoxDecoration(
-                          color: _currentPage == index ? AppColors.primaryContainer : AppColors.outlineVariant,
+                          color: _currentPage == index
+                              ? c.primary
+                              : c.surfaceMuted,
                           borderRadius: BorderRadius.circular(3),
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                   ),
-                  const SizedBox(height: 48),
-                  ElevatedButton(
-                    onPressed: _nextPage,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: AppColors.primaryContainer,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      minimumSize: const Size(double.infinity, 56),
-                    ),
-                    child: Text(
-                      _currentPage == _slides.length - 1 ? 'Get Started' : 'Next',
-                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _nextPage,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: c.primary,
+                        foregroundColor: c.onPrimary,
+                        minimumSize: const Size.fromHeight(56),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        textStyle: GoogleFonts.inter(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      child: Text(
+                        _currentPage == _slides.length - 1
+                            ? 'Get Started'
+                            : 'Next',
+                      ),
                     ),
                   ),
                 ],

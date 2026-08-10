@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
-import 'dart:math' as math;
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -9,23 +8,27 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnim;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnim;
+  late final Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
-    )..repeat(reverse: true);
-
-    _scaleAnim = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 1600),
+    )..forward();
+    _scaleAnim = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
 
-    Future.delayed(const Duration(milliseconds: 2800), () {
+    Future.delayed(const Duration(milliseconds: 2400), () {
       if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
     });
   }
@@ -39,83 +42,118 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildAnimatedIcon(),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'SolarMitra',
-                        style: TextStyle(color: AppColors.navy, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5),
-                      ),
-                      const Text(
-                        'Smart Solar Planning',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w400),
-                      ),
-                    ],
-                  ),
+      backgroundColor: AppColors.primaryDeep,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryDeep,
+                    AppColors.primary,
+                    const Color(0xFF0B6B4F),
+                  ],
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 24.0),
-                child: Text(
-                  'Powered by AI & Augmented Reality',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnimatedIcon() {
-    return SizedBox(
-      width: 140, height: 140,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AnimatedBuilder(
-            animation: _scaleAnim,
-            builder: (context, child) => Transform.scale(
-              scale: _scaleAnim.value,
-              child: child,
             ),
+          ),
+          Positioned(
+            top: -80,
+            right: -60,
             child: Container(
-              width: 140, height: 140,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.primary, width: 1.5)),
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
             ),
           ),
-          AnimatedBuilder(
-            animation: _scaleAnim,
-            builder: (context, child) => Transform.scale(
-              scale: _scaleAnim.value,
-              child: child,
-            ),
-            child: Container(
-              width: 120, height: 120,
-              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.primary, width: 2)),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: FadeTransition(
+                        opacity: _fadeAnim,
+                        child: ScaleTransition(
+                          scale: _scaleAnim,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 124,
+                                height: 124,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(26),
+                                  child: Image.asset(
+                                    'assets/logo.png',
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+                              const Text(
+                                'SolarMitra',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Smart solar planning with AR',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 28),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.wb_sunny_rounded,
+                            color: AppColors.gold, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Clean energy · Clear savings',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.asset(
-              'assets/logo.png',
-              width: 90,
-              height: 90,
-              fit: BoxFit.cover,
-            ),
-          )
         ],
       ),
     );

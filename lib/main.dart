@@ -26,7 +26,9 @@ class SolarMitraApp extends StatelessWidget {
     return MaterialApp(
       title: 'SolarMitra',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashScreen(),

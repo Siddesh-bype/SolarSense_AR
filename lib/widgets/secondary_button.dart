@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class SecondaryButton extends StatelessWidget {
   final String text;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool isFullWidth;
   final Widget? icon;
 
@@ -16,35 +16,21 @@ class SecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget button;
-    if (icon != null) {
-      button = OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: icon!,
-        label: Text(text),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    } else {
-      button = OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: Text(text),
-      );
-    }
-
+    final button = onPressed == null
+        ? null
+        : () {
+            FocusScope.of(context).unfocus();
+            onPressed!();
+          };
+    final content = icon == null
+        ? Text(text)
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [icon!, const SizedBox(width: 8), Text(text)],
+          );
     return SizedBox(
       width: isFullWidth ? double.infinity : null,
-      child: button,
+      child: OutlinedButton(onPressed: button, child: content),
     );
   }
 }

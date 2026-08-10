@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
@@ -21,10 +22,14 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   @override
   Widget build(BuildContext context) {
     final data = ModalRoute.of(context)?.settings.arguments as EnrichedScanResult?;
+    final c = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Your Solar Report'),
+        title: Text('Your Solar Report',
+            style: tt.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700, color: c.onSurface)),
         actions: [
           IconButton(
             onPressed: data == null || _downloading ? null : () => _share(data),
@@ -68,7 +73,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Report failed: ${_friendly(e)}'),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: AppColors.error,
           duration: const Duration(seconds: 5),
         ),
       );
@@ -95,23 +100,25 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final c = AppColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.view_in_ar_outlined, color: AppColors.textSecondary, size: 72),
+            Icon(Icons.view_in_ar_outlined, color: c.onSurfaceMuted, size: 72),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No scan data yet',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              style: GoogleFonts.manrope(
+                  fontSize: 20, fontWeight: FontWeight.bold, color: c.onSurface),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Run an AR scan of your roof to see your solar report.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: GoogleFonts.inter(color: c.onSurfaceMuted, fontSize: 14),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -145,7 +152,15 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
               const SizedBox(height: 16),
               _buildScanMetricsRow(context, data),
               const SizedBox(height: 24),
-              Text('Financial Summary', style: Theme.of(context).textTheme.titleLarge),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text('Financial Summary',
+                    style: GoogleFonts.manrope(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: Theme.of(context).colorScheme.onSurface)),
+              ),
               const SizedBox(height: 16),
               _buildFinancialGrid(context, data),
               const SizedBox(height: 24),
@@ -171,11 +186,18 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFF97316), Color(0xFFEA580C)],
+          colors: [Color(0xFF047857), Color(0xFF059669), Color(0xFF0B6B4F)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,19 +211,20 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
                   children: [
                     Text(
                       'System Size: ${data.systemSizeKw.toStringAsFixed(2)} kW',
-                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.manrope(
+                          color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Annual Generation: ${data.annualKwh.toStringAsFixed(0)} kWh',
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      style: GoogleFonts.inter(color: Colors.white, fontSize: 16),
                     ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
                         const Icon(Icons.location_on, color: Colors.white70, size: 16),
                         const SizedBox(width: 4),
-                        Text(stateLabel, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text(stateLabel, style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
                       ],
                     ),
                   ],
@@ -212,10 +235,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
                 height: 80,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.gold.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.solar_power_outlined, color: Colors.white, size: 44),
+                  child: const Icon(Icons.solar_power, color: AppColors.goldDeep, size: 44),
                 ),
               )
             ],
@@ -250,22 +273,23 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
 
   /// Shows the three values that came directly from the AR scan.
   Widget _buildScanMetricsRow(BuildContext context, EnrichedScanResult data) {
+    final c = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
-              Icon(Icons.view_in_ar, color: AppColors.primary, size: 16),
+          const Row(
+            children: [
+              Icon(Icons.view_in_ar, color: AppColors.primaryDeep, size: 16),
               SizedBox(width: 6),
-              Text('From your AR scan',
-                  style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+              Text('FROM YOUR AR SCAN',
+                  style: TextStyle(color: AppColors.primaryDeep, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
             ],
           ),
           const SizedBox(height: 12),
@@ -285,14 +309,15 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+        Text(label, style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 11)),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: GoogleFonts.manrope(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
       ],
     );
   }
 
   Widget _buildFinancialGrid(BuildContext context, EnrichedScanResult data) {
+    final c = AppColors.of(context);
     return GridView.count(
       crossAxisCount: 2,
       crossAxisSpacing: 12,
@@ -301,29 +326,30 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.5,
       children: [
-        _buildGridCard('Gross Cost', '₹${_fmt(data.estimatedCost)}', AppColors.textPrimary),
-        _buildGridCard('Govt. Subsidy', '₹${_fmt(data.totalSubsidy)}', AppColors.success),
-        _buildGridCard('Net Cost', '₹${_fmt(data.netCost)}', AppColors.primary),
-        _buildGridCard('Payback', '${data.paybackYears.toStringAsFixed(1)} years', AppColors.textPrimary),
+        _buildGridCard(c, 'Gross Cost', '₹${_fmt(data.estimatedCost)}', AppColors.textPrimary),
+        _buildGridCard(c, 'Govt. Subsidy', '₹${_fmt(data.totalSubsidy)}', AppColors.success),
+        _buildGridCard(c, 'Net Cost', '₹${_fmt(data.netCost)}', AppColors.primaryDeep),
+        _buildGridCard(c, 'Payback', '${data.paybackYears.toStringAsFixed(1)} years', AppColors.textPrimary),
       ],
     );
   }
 
-  Widget _buildGridCard(String label, String value, Color valueColor) {
+  Widget _buildGridCard(SolarPalette c, String label, String value, Color valueColor) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: c.border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          Text(label, style: GoogleFonts.inter(color: c.onSurfaceMuted, fontSize: 12)),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(color: valueColor, fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(value, style: GoogleFonts.manrope(color: valueColor, fontSize: 20, fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -335,27 +361,30 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
     // Post-solar bill = current bill − savings (floored at 0). Only render if we
     // actually know the user's current bill.
     final billAfter = billBefore == null ? null : (billBefore - monthlySavings).clamp(0, billBefore);
+    final c = AppColors.of(context);
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: c.border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Monthly Bill Savings: ₹$monthlySavings', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('Monthly Bill Savings: ₹$monthlySavings',
+              style: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w800, color: c.onSurface)),
           const SizedBox(height: 24),
           if (billBefore != null && billAfter != null) ...[
-            _buildBarChartRow('Before', billBefore, Colors.redAccent, 1.0),
+            _buildBarChartRow('Before', billBefore, AppColors.error, 1.0),
             const SizedBox(height: 16),
             _buildBarChartRow('After', billAfter, AppColors.success, billBefore == 0 ? 0.0 : billAfter / billBefore),
           ] else
-            const Text(
+            Text(
               'Enter your current monthly bill in Setup to see a before/after comparison.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: GoogleFonts.inter(color: c.onSurfaceMuted, fontSize: 13),
             ),
         ],
       ),
@@ -363,21 +392,28 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   }
 
   Widget _buildBarChartRow(String label, int amount, Color color, double factor) {
+    final c = AppColors.of(context);
     return Row(
       children: [
-        SizedBox(width: 50, child: Text(label, style: const TextStyle(color: AppColors.textSecondary))),
+        SizedBox(width: 50, child: Text(label, style: GoogleFonts.inter(color: c.onSurfaceMuted))),
         Expanded(
           child: Stack(
             children: [
-              Container(height: 24, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(12))),
+              Container(height: 24, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(12))),
               FractionallySizedBox(
                 widthFactor: factor.clamp(0.05, 1.0),
                 child: Container(
                   height: 24,
-                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: factor == 1.0
+                        ? [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6)]
+                        : null,
+                  ),
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 8),
-                  child: Text('₹$amount', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text('₹$amount', style: GoogleFonts.manrope(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
@@ -393,20 +429,23 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       final yr = i * 5.0;
       return FlSpot(yr, data.annualSavingsInr * yr / 100000);
     });
+    final c = AppColors.of(context);
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: c.border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Total 25-Year Savings', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+          Text('Total 25-Year Savings', style: GoogleFonts.inter(color: c.onSurfaceMuted, fontSize: 14)),
           const SizedBox(height: 4),
-          Text('₹${savings25yr.toStringAsFixed(2)} Lakh', style: const TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.bold)),
+          Text('₹${savings25yr.toStringAsFixed(2)} Lakh',
+              style: GoogleFonts.manrope(color: AppColors.primaryDeep, fontSize: 28, fontWeight: FontWeight.w800)),
           const SizedBox(height: 24),
           SizedBox(
             height: 150,
@@ -421,7 +460,8 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 22,
-                      getTitlesWidget: (value, meta) => Text('Yr ${value.toInt()}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                      getTitlesWidget: (value, meta) => Text('Yr ${value.toInt()}',
+                          style: GoogleFonts.inter(color: c.onSurfaceMuted, fontSize: 10)),
                       interval: 5,
                     ),
                   ),
@@ -431,11 +471,12 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
                   LineChartBarData(
                     spots: spots,
                     isCurved: true,
-                    color: AppColors.primary,
+                    color: AppColors.primaryDeep,
                     barWidth: 3,
                     isStrokeCapRound: true,
                     dotData: FlDotData(show: false),
-                    belowBarData: BarAreaData(show: true, color: AppColors.primary.withOpacity(0.1)),
+                    belowBarData: BarAreaData(
+                        show: true, color: AppColors.primary.withValues(alpha: 0.12)),
                   ),
                 ],
               ),
@@ -449,13 +490,14 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   Widget _buildEnvironmentalCard(BuildContext context, EnrichedScanResult data) {
     final co2Tonnes = data.annualKwh * 0.000820;
     final trees = (co2Tonnes * 16).toInt();
+    final c = AppColors.of(context);
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.success.withOpacity(0.1),
+        color: AppColors.success.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.success.withOpacity(0.3)),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,12 +508,13 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
               const SizedBox(width: 8),
               Text(
                 'CO₂ Avoided: ${co2Tonnes.toStringAsFixed(1)} tonnes/year',
-                style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: GoogleFonts.manrope(color: c.onSurface, fontWeight: FontWeight.w800, fontSize: 16),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text('Equivalent to planting $trees trees annually', style: const TextStyle(color: AppColors.textSecondary)),
+          Text('Equivalent to planting $trees trees annually',
+              style: GoogleFonts.inter(color: c.onSurfaceMuted)),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -483,13 +526,14 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   }
 
   Widget _buildSubsidyCard(BuildContext context, EnrichedScanResult data) {
+    final c = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-        border: Border.all(color: AppColors.border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,25 +541,27 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.orange.shade200),
+              color: AppColors.goldSoft,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.gold),
             ),
-            child: const Text('PM Surya Ghar Yojana', style: TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.bold)),
+            child: const Text('PM Surya Ghar Yojana',
+                style: TextStyle(fontSize: 10, color: AppColors.goldDeep, fontWeight: FontWeight.w800)),
           ),
           const SizedBox(height: 12),
-          Text('Total Subsidy: ₹${_fmt(data.totalSubsidy)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('Total Subsidy: ₹${_fmt(data.totalSubsidy)}',
+              style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.w800, color: c.onSurface)),
           const SizedBox(height: 4),
           Text(
             'Central: ₹${_fmt(data.centralSubsidy)}${data.stateSubsidy > 0 ? ' + ${data.stateDisplayName}: ₹${_fmt(data.stateSubsidy)}' : ''}',
-            style: const TextStyle(color: AppColors.textSecondary),
+            style: GoogleFonts.inter(color: c.onSurfaceMuted),
           ),
           const SizedBox(height: 16),
           OutlinedButton(
             onPressed: () {},
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
+              foregroundColor: AppColors.primaryDeep,
+              side: const BorderSide(color: AppColors.primaryDeep),
               minimumSize: const Size(double.infinity, 40),
             ),
             child: const Text('Apply Now'),
@@ -526,6 +572,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   }
 
   Widget _buildStickyBottomBar(BuildContext context, EnrichedScanResult data) {
+    final c = AppColors.of(context);
     return Positioned(
       bottom: 0, left: 0, right: 0,
       child: Container(
@@ -535,7 +582,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
         ),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -555,7 +602,8 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: () => Navigator.pushNamed(context, '/vendors', arguments: data),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.border), foregroundColor: AppColors.textPrimary),
+              style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: c.border), foregroundColor: c.onSurface),
               child: const Text('Find Solar Vendors Near Me'),
             ),
           ],

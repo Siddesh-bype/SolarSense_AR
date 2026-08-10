@@ -26,7 +26,6 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
   final _locationService = LocationService();
   final _session = UserSession.instance;
 
-  // All fields start empty — user must fill them.
   final _cityCtrl = TextEditingController();
   final _billCtrl = TextEditingController();
   final _tariffCtrl = TextEditingController();
@@ -41,7 +40,6 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
   @override
   void initState() {
     super.initState();
-    // Prefill from session if the user has already been here before.
     _cityCtrl.text = _session.city ?? '';
     _billCtrl.text = _session.monthlyBillInr?.toStringAsFixed(0) ?? '';
     _tariffCtrl.text = _session.avgTariffInr?.toStringAsFixed(2) ?? '';
@@ -61,14 +59,13 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
   }
 
   Future<void> _useGps() async {
-    setState(() { _locating = true; _error = null; });
+    setState(() {
+      _locating = true;
+      _error = null;
+    });
     try {
       final loc = await _locationService.getCurrentLatLon();
       _session.updateScanInputs(lat: loc.lat, lon: loc.lon);
-
-      // Reverse-geocode (free, OpenStreetMap Nominatim) so the user doesn't
-      // have to type the city / pick the state manually. On any failure we
-      // just leave the fields as-is — the raw lat/lon is already locked.
       final place = await _locationService.reverseGeocode(loc.lat, loc.lon);
       if (!mounted) return;
       if (place != null) {
@@ -78,10 +75,7 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
         if (place.stateKey != null && _kStates.containsKey(place.stateKey)) {
           _stateKey = place.stateKey;
         }
-        _session.updateScanInputs(
-          city: place.city,
-          stateKey: place.stateKey,
-        );
+        _session.updateScanInputs(city: place.city, stateKey: place.stateKey);
       }
     } catch (_) {
       setState(() => _error = 'Could not get GPS. Enter location manually.');
@@ -121,52 +115,162 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(
-        title: null,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
+      appBar: AppBar(),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Set Up Your Scan',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.secondary,
+                'Set up your scan',
+                style: tt.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  color: c.onSurface,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Tell us about your home — the AR scan will handle the panels.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                style: tt.bodyLarge?.copyWith(color: c.onSurfaceMuted),
               ),
               const SizedBox(height: 24),
-              _buildLocationCard(),
+              _card('Your City', [
+                CustomTextField(
+                  controller: _cityCtrl,
+                  hintText: 'e.g. Pune',
+                  prefixIcon: Icons.location_on_outlined,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _locating ? null : _useGps,
+                  icon: _locating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location),
+                  label: Text(_session.lat != null ? 'GPS locked' : 'Use GPS'),
+                ),
+              ]),
               const SizedBox(height: 16),
-              _buildStateCard(),
+              _card('State (for subsidy calculation)', [
+                _dropdown(
+                  value: _stateKey,
+                  hint: 'Select your state',
+                  items: _kStates.entries
+                      .map((e) =>
+                          DropdownMenuItem(value: e.key, child: Text(e.value)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _stateKey = val),
+                ),
+              ]),
               const SizedBox(height: 16),
-              _buildRoofTypeCard(),
+              _card('Roof Type', [
+                Row(
+                  children: ['Flat', 'Sloped', 'Mixed'].map((type) {
+                    final isSelected = _roofType == type;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _roofType = type),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color:
+                                isSelected ? c.primary : Colors.transparent,
+                            border:
+                                Border.all(color: isSelected ? c.primary : c.border),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            type,
+                            style: tt.labelMedium?.copyWith(
+                              color: isSelected
+                                  ? c.onPrimary
+                                  : c.onSurface,
+                              fontWeight:
+                                  isSelected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ]),
               const SizedBox(height: 16),
-              _buildRoofAreaCard(),
+              _card('Approximate roof area (sq ft) — optional', [
+                CustomTextField(
+                  controller: _roofAreaCtrl,
+                  hintText: '0',
+                  keyboardType: TextInputType.number,
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text('sq ft',
+                        style: TextStyle(color: c.onSurfaceMuted)),
+                  ),
+                  helperText: "Leave blank — we'll estimate from the AR scan",
+                ),
+              ]),
               const SizedBox(height: 16),
-              _buildBillCard(),
+              _card('Average monthly bill (₹)', [
+                CustomTextField(
+                  controller: _billCtrl,
+                  hintText: 'e.g. 2500',
+                  keyboardType: TextInputType.number,
+                  prefixIcon: Icons.currency_rupee,
+                ),
+              ]),
               const SizedBox(height: 16),
-              _buildTariffCard(),
+              _card('Electricity tariff (₹ / kWh) — optional', [
+                CustomTextField(
+                  controller: _tariffCtrl,
+                  hintText: 'e.g. 8.5',
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  prefixIcon: Icons.bolt_outlined,
+                  helperText: "Leave blank — we'll use the state average",
+                ),
+              ]),
               const SizedBox(height: 16),
-              _buildProviderCard(),
+              _card('Electricity provider (optional)', [
+                _dropdown(
+                  value: _provider,
+                  hint: 'Select provider',
+                  items: ['MSEDCL', 'BESCOM', 'TATA Power', 'Adani', 'Torrent Power', 'Other']
+                      .map((e) =>
+                          DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _provider = val),
+                ),
+              ]),
               if (_error != null) ...[
                 const SizedBox(height: 16),
-                Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: c.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.error.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(_error!,
+                      style: tt.bodySmall?.copyWith(color: c.error)),
+                ),
               ],
               const SizedBox(height: 24),
               PrimaryButton(
                 text: 'Continue to AR Scan',
                 onPressed: _continue,
+                icon: Icons.arrow_forward,
               ),
               const SizedBox(height: 24),
             ],
@@ -176,189 +280,55 @@ class _SetupScanScreenState extends State<SetupScanScreen> {
     );
   }
 
-  Widget _buildCardBase({required String label, required Widget child}) {
+  Widget _card(String label, List<Widget> children) {
+    final c = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: c.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: tt.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              fontSize: 14,
-              color: AppColors.textPrimary,
+              color: c.onSurface,
             ),
           ),
           const SizedBox(height: 12),
-          child,
+          ...children,
         ],
       ),
     );
   }
 
-  Widget _buildLocationCard() {
-    return _buildCardBase(
-      label: 'Your City',
-      child: Column(
-        children: [
-          CustomTextField(
-            controller: _cityCtrl,
-            hintText: 'e.g. Pune',
-            prefixIcon: Icons.location_on_outlined,
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _locating ? null : _useGps,
-            icon: _locating
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.my_location, color: AppColors.primary),
-            label: Text(
-              _session.lat != null ? 'GPS locked' : 'Use GPS',
-              style: const TextStyle(color: AppColors.primary),
-            ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              side: const BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ],
+  Widget _dropdown({
+    required String? value,
+    required String hint,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final c = AppColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(14),
       ),
-    );
-  }
-
-  Widget _buildStateCard() {
-    return _buildCardBase(
-      label: 'State (for subsidy calculation)',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: _stateKey,
-            isExpanded: true,
-            hint: const Text('Select your state'),
-            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
-            items: _kStates.entries
-                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
-                .toList(),
-            onChanged: (val) => setState(() => _stateKey = val),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoofTypeCard() {
-    return _buildCardBase(
-      label: 'Roof Type',
-      child: Row(
-        children: ['Flat', 'Sloped', 'Mixed'].map((type) {
-          final isSelected = _roofType == type;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _roofType = type),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : Colors.white,
-                  border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  type,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildRoofAreaCard() {
-    return _buildCardBase(
-      label: 'Approximate Roof Area (sq ft) — optional',
-      child: CustomTextField(
-        controller: _roofAreaCtrl,
-        hintText: '0',
-        keyboardType: TextInputType.number,
-        suffixIcon: const Padding(
-          padding: EdgeInsets.all(14.0),
-          child: Text('sq ft', style: TextStyle(color: AppColors.textSecondary)),
-        ),
-        helperText: "Leave blank — we'll estimate from the AR scan",
-      ),
-    );
-  }
-
-  Widget _buildBillCard() {
-    return _buildCardBase(
-      label: 'Average Monthly Bill (₹)',
-      child: CustomTextField(
-        controller: _billCtrl,
-        hintText: 'e.g. 2500',
-        keyboardType: TextInputType.number,
-        prefixIcon: Icons.currency_rupee,
-      ),
-    );
-  }
-
-  Widget _buildTariffCard() {
-    return _buildCardBase(
-      label: 'Electricity Tariff (₹ / kWh) — optional',
-      child: CustomTextField(
-        controller: _tariffCtrl,
-        hintText: 'e.g. 8.5',
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        prefixIcon: Icons.bolt_outlined,
-        helperText: "Leave blank — we'll use the state average",
-      ),
-    );
-  }
-
-  Widget _buildProviderCard() {
-    return _buildCardBase(
-      label: 'Electricity Provider (optional)',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: _provider,
-            isExpanded: true,
-            hint: const Text('Select provider'),
-            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
-            items: ['MSEDCL', 'BESCOM', 'TATA Power', 'Adani', 'Torrent Power', 'Other']
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
-            onChanged: (val) => setState(() => _provider = val),
-          ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          hint: Text(hint, style: TextStyle(color: c.onSurfaceMuted)),
+          icon: Icon(Icons.keyboard_arrow_down, color: c.onSurfaceMuted),
+          items: items,
+          onChanged: onChanged,
         ),
       ),
     );
