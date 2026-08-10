@@ -1,10 +1,12 @@
 // lib/models/enriched_scan_result.dart
 //
 // Single result model holding the complete output of all on-device services.
-// Replaces the backend-shaped EnrichedScanResponse for the on-device pipeline.
+
+import 'dart:typed_data';
 
 import 'brand_recommendation.dart';
 import 'obstacle_detection.dart';
+import 'obstacle_summary.dart';
 
 class EnrichedScanResult {
   // ── Scan geometry ──────────────────────────────────────────────────────────
@@ -15,8 +17,9 @@ class EnrichedScanResult {
 
   // ── PVGIS irradiance ───────────────────────────────────────────────────────
   final double peakSunHours;   // daily PSH average
-  final bool pvgisFallback;    // true → PVGIS failed, using 4.5 default
-  final double annualKwh;      // systemSizeKw × peakSunHours × 365
+  final bool pvgisFallback;    // true → PVGIS failed, using regional fallback
+  final double annualKwh;      // net generation after shading loss
+  final double annualKwhGross; // generation before shading loss (for reporting)
 
   // ── Financial ──────────────────────────────────────────────────────────────
   final int centralSubsidy;    // ₹30,000 / ₹60,000 / ₹78,000
@@ -27,14 +30,21 @@ class EnrichedScanResult {
   final double paybackYears;   // netCost / (annualKwh × avgTariff)
   final double annualSavingsInr;
 
-  // ── State info ─────────────────────────────────────────────────────────────
+  // ── Obstacles & shading ────────────────────────────────────────────────────
+  final ObstacleSummary obstacleSummary; // reserved area + shading loss
+  final List<ObstacleDetection> detectedObstacles;
+
+  // ── Scan metadata ──────────────────────────────────────────────────────────
+  final double? lat;              // scan latitude (drives monthly solar curve)
+  final double? lon;
+  final double? headingDeg;       // compass heading at scan time
+  final Uint8List? captureJpeg;   // AR snapshot shown in the report
   final String stateDisplayName;
   final String statePortal;
   final String stateNotes;
 
-  // ── Brands & obstacles ─────────────────────────────────────────────────────
+  // ── Brands ─────────────────────────────────────────────────────────────────
   final List<BrandRecommendation> brandRecommendations;
-  final List<ObstacleDetection> detectedObstacles;
 
   const EnrichedScanResult({
     required this.totalAreaM2,
@@ -44,6 +54,7 @@ class EnrichedScanResult {
     required this.peakSunHours,
     required this.pvgisFallback,
     required this.annualKwh,
+    this.annualKwhGross = 0.0,
     required this.centralSubsidy,
     required this.stateSubsidy,
     required this.totalSubsidy,
@@ -51,10 +62,73 @@ class EnrichedScanResult {
     required this.netCost,
     required this.paybackYears,
     required this.annualSavingsInr,
+    this.obstacleSummary = const ObstacleSummary(obstacleAreaM2: 0, shadingLossPct: 0),
+    this.detectedObstacles = const [],
+    this.lat,
+    this.lon,
+    this.headingDeg,
+    this.captureJpeg,
     required this.stateDisplayName,
     required this.statePortal,
     required this.stateNotes,
     required this.brandRecommendations,
-    required this.detectedObstacles,
   });
+
+  double get obstacleAreaM2 => obstacleSummary.obstacleAreaM2;
+  double get shadingLossPct => obstacleSummary.shadingLossPct;
+
+  EnrichedScanResult copyWith({
+    double? totalAreaM2,
+    double? usableAreaM2,
+    int? panelCount,
+    double? systemSizeKw,
+    double? peakSunHours,
+    bool? pvgisFallback,
+    double? annualKwh,
+    double? annualKwhGross,
+    int? centralSubsidy,
+    int? stateSubsidy,
+    int? totalSubsidy,
+    int? estimatedCost,
+    int? netCost,
+    double? paybackYears,
+    double? annualSavingsInr,
+    ObstacleSummary? obstacleSummary,
+    List<ObstacleDetection>? detectedObstacles,
+    double? lat,
+    double? lon,
+    double? headingDeg,
+    Uint8List? captureJpeg,
+    String? stateDisplayName,
+    String? statePortal,
+    String? stateNotes,
+    List<BrandRecommendation>? brandRecommendations,
+  }) =>
+      EnrichedScanResult(
+        totalAreaM2: totalAreaM2 ?? this.totalAreaM2,
+        usableAreaM2: usableAreaM2 ?? this.usableAreaM2,
+        panelCount: panelCount ?? this.panelCount,
+        systemSizeKw: systemSizeKw ?? this.systemSizeKw,
+        peakSunHours: peakSunHours ?? this.peakSunHours,
+        pvgisFallback: pvgisFallback ?? this.pvgisFallback,
+        annualKwh: annualKwh ?? this.annualKwh,
+        annualKwhGross: annualKwhGross ?? this.annualKwhGross,
+        centralSubsidy: centralSubsidy ?? this.centralSubsidy,
+        stateSubsidy: stateSubsidy ?? this.stateSubsidy,
+        totalSubsidy: totalSubsidy ?? this.totalSubsidy,
+        estimatedCost: estimatedCost ?? this.estimatedCost,
+        netCost: netCost ?? this.netCost,
+        paybackYears: paybackYears ?? this.paybackYears,
+        annualSavingsInr: annualSavingsInr ?? this.annualSavingsInr,
+        obstacleSummary: obstacleSummary ?? this.obstacleSummary,
+        detectedObstacles: detectedObstacles ?? this.detectedObstacles,
+        lat: lat ?? this.lat,
+        lon: lon ?? this.lon,
+        headingDeg: headingDeg ?? this.headingDeg,
+        captureJpeg: captureJpeg ?? this.captureJpeg,
+        stateDisplayName: stateDisplayName ?? this.stateDisplayName,
+        statePortal: statePortal ?? this.statePortal,
+        stateNotes: stateNotes ?? this.stateNotes,
+        brandRecommendations: brandRecommendations ?? this.brandRecommendations,
+      );
 }

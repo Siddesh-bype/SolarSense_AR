@@ -51,6 +51,29 @@ SolarMitra relies on a localized **Orchestration Pipeline** (`ScanOrchestrator`)
 
 ---
 
+## 🧩 On-Device First & Backend Seams
+
+SolarMitra is **on-device first**: every computation (AR mapping, obstacle
+detection, irradiance math, subsidy logic, PDF generation) runs locally. No
+account or server is required to get a full report. The only network call is an
+optional PVGIS irradiance lookup, which gracefully falls back to a regional
+estimate when offline.
+
+For teams that want cloud sync or lead hand-off, `lib/repositories/` defines
+clean boundaries:
+
+| Boundary | On-device default | Optional backend seam |
+|----------|-------------------|-----------------------|
+| `AuthRepository` | guest session (`UserSession`) | Firebase Auth |
+| `ScanRepository` | bounded in-memory cache | Firestore |
+| `LeadsRepository` | local lead queue | FastAPI `/leads` |
+
+The seams are sketched (commented, not imported) so enabling a backend never
+forces a `firebase_*` / `http` dependency into the build until you actually
+wire it. Swap the implementation in `main()` when ready.
+
+---
+
 ## 📂 Deep Dive: Project Structure
 
 ```text
@@ -72,7 +95,8 @@ SolarMitra relies on a localized **Orchestration Pipeline** (`ScanOrchestrator`)
 │       ├── obstacle_service.dart       # TFLite inferences & Shadow Area math
 │       ├── brand_service.dart          # Recommend ALMM brands by price bracket
 │       └── subsidy_service.dart        # State/Central PM Surya Ghar computations
-├── report Module/                # [Optional] Python FastAPI AI generation backend
+├── lib/repositories/             # Auth/Scan/Leads boundaries (on-device + seams)
+├── tools/                        # convert_yolo.py — PT→ONNX→TFLite pipeline
 └── pubspec.yaml                  # Project dependencies
 ```
 
@@ -97,6 +121,10 @@ The project uses `tflite_flutter`, `pdf`, `fl_chart`, and `geolocator` among oth
 ```bash
 flutter pub get
 ```
+The on-device obstacle model `assets/models/yolov8n.tflite` is committed to the
+repo. To regenerate it (e.g. after retraining YOLOv8n), see
+[`tools/convert_yolo.md`](tools/convert_yolo.md) — the conversion uses an
+ONNX→TFLite path because Ultralytics' built-in TFLite exporter is Linux/macOS-only.
 
 ### 3. Setup Android API Keys (If needed)
 Ensure you have the required capabilities enabled in `android/app/src/main/AndroidManifest.xml` (e.g., Camera permissions, Internet access, ARCore metadata).

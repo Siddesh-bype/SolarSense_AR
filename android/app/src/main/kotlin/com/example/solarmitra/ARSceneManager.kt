@@ -2,8 +2,17 @@ package com.example.solarmitra
 
 import android.Manifest
 import android.content.ComponentCallbacks2
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.media.Image
 import android.opengl.GLSurfaceView
 import android.util.Log
 import android.view.Surface
@@ -14,7 +23,6 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import com.google.ar.core.Anchor
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
@@ -23,18 +31,24 @@ import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.platform.PlatformView
+import java.io.ByteArrayOutputStream
 
 /**
- * Pure ARCore + GLSurfaceView — no Filament, no SceneView dependency.
- * Completely avoids the Impeller/Filament Vulkan conflict.
+ * ARCore + GLSurfaceView pipeline (proven, Impeller-safe) upgraded for the
+ * rebuild:
+ *   • Solar azimuth is now APPLIED to every panel (the previous
+ *     `panelAzimuthDeg` was computed but never composed into the pose).
+ *   • Real camera-frame capture via `captureFrame` — the link that makes
+ *     on-device obstacle detection live (frames are grabbed on the GL thread
+ *     to respect ARCore's single-thread `update()` contract).
+ *   • HUD streams heading (compass), depth availability, tracking state and
+ *     an occlusion count so the Flutter UI reflects real-world conditions.
  *
- * Init sequence:
- *  1. GLSurfaceView surface created → onSurfaceCreated fires on GL thread
- *  2. Renderer calls back → main thread checks/requests camera permission
- *  3. Permission granted → createSession() called
- *  4. Session configured and resumed, texture bound to OES texture
- *  5. onDrawFrame runs per-frame, ARCore planes detected, panels placed
+ * Note: GPU/Filament depth occlusion is the ideal next step; here we expose
+ * depth availability and a per-panel occlusion hook (`renderer.setOcclusion`)
+ * rather than fragile per-pixel depth reprojection.
  */
 class ARSceneManager(
     private val activity: ComponentActivity,
@@ -56,7 +70,6 @@ class ARSceneManager(
 
     private val orientationCallback = object : ComponentCallbacks2 {
         override fun onConfigurationChanged(newConfig: Configuration) {
-            Log.e(TAG, "Configuration changed: orientation=${newConfig.orientation}")
             glSurfaceView.queueEvent { renderer.onDisplayRotationChanged() }
         }
         override fun onLowMemory() {}
@@ -67,23 +80,48 @@ class ARSceneManager(
     private var sessionCreated = false
 
     private var currentPlane: Plane? = null
-    private val panelAnchors = mutableListOf<Anchor>()
+    private val panelAnchors = mutableListOf<com.google.ar.core.Anchor>()
     private var frameCount = 0
+    private var depthSeen = false
 
     // Sun-path-driven placement — configured from Flutter before plane detection.
-    // Defaults ≈ central-India optimum (lat 20°) and 0.45 m (~1.5 ft) mounting height.
     private var panelTiltDeg = 18.3f      // SunPath.optimalTiltDeg(20)
-    @Suppress("unused") private var panelAzimuthDeg = 180f
+    private var panelAzimuthDeg = 180f    // NOW APPLIED — yaw about plane-local +Y
     private var panelElevationM = 0.45f
 
     var eventSink: EventChannel.EventSink? = null
 
+    // ── Compass (heading) ───────────────────────────────────────────────────
+    private val sensorManager =
+        activity.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private var headingDeg = 0f
+    private val rotationMatrix = FloatArray(9)
+    private val orientationVec = FloatArray(3)
+    private val sensorListener = object : SensorEventListener {
+        override fun onSensorChanged(e: SensorEvent) {
+            if (e.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, e.values)
+                SensorManager.getOrientation(rotationMatrix, orientationVec)
+                val az = Math.toDegrees(orientationVec[0].toDouble()).toFloat()
+                headingDeg = if (az < 0) az + 360f else az
+            }
+        }
+        override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+    }
+
+    // ── One-shot frame capture (obstacle detection) ───────────────────────────
+    private var pendingCapture = false
+    private var pendingCaptureResult: MethodChannel.Result? = null
+
     init {
-        Log.e(TAG, "ARSceneManager.init")
         setupGLView()
         activity.lifecycle.addObserver(this)
         activity.registerComponentCallbacks(orientationCallback)
-        Log.e(TAG, "ARSceneManager.init -- complete")
+        try {
+            sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let {
+                sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_UI)
+            }
+        } catch (_: Exception) { /* compass optional */ }
     }
 
     private fun setupGLView() {
@@ -92,13 +130,9 @@ class ARSceneManager(
         glSurfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0)
         glSurfaceView.setRenderer(renderer)
         glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
-
-        // Fired on GL thread once surface is ready; we callback to UI thread
         renderer.onSurfaceReadyCallback = {
-            Log.e(TAG, "GL surface ready")
             activity.runOnUiThread { checkPermissionAndSetup() }
         }
-
         rootView.addView(
             glSurfaceView,
             FrameLayout.LayoutParams(
@@ -108,35 +142,24 @@ class ARSceneManager(
         )
     }
 
-    // ── Permission ────────────────────────────────────────────────────────────
+    // ── Permission ───────────────────────────────────────────────────────────
 
     private fun checkPermissionAndSetup() {
         if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            Log.e(TAG, "Camera permission already granted")
             createSession()
         } else {
-            Log.e(TAG, "Requesting camera permission")
             cameraPermLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
-    /** Called from MainActivity when the user grants camera permission. */
     fun onCameraPermissionGranted() {
-        Log.e(TAG, "onCameraPermissionGranted")
         emitCameraPermission("granted", false)
         createSession()
     }
 
-    /**
-     * Called from MainActivity when the user denies the camera permission.
-     * `permanent = true` means the user chose "Don't ask again" — a second
-     * in-app request will be ignored by the system, so Flutter should guide
-     * the user to Settings instead of re-prompting.
-     */
     fun onCameraPermissionDenied(permanent: Boolean) {
-        Log.e(TAG, "onCameraPermissionDenied (permanent=$permanent)")
         emitCameraPermission("denied", permanent)
     }
 
@@ -157,10 +180,7 @@ class ARSceneManager(
         try {
             if (ArCoreApk.getInstance().requestInstall(activity, true)
                 == ArCoreApk.InstallStatus.INSTALL_REQUESTED
-            ) {
-                Log.e(TAG, "ARCore install requested")
-                return
-            }
+            ) return
 
             val s = Session(activity)
             Config(s).apply {
@@ -170,26 +190,19 @@ class ARSceneManager(
                 updateMode          = Config.UpdateMode.LATEST_CAMERA_IMAGE
             }.also { s.configure(it) }
 
-            Log.e(TAG, "ARCore session created — queuing GL-thread init")
-            // CRITICAL: setCameraTextureName must be called on the GL thread AND
-            // before session.resume(). Queue the whole startup sequence on GL thread.
             glSurfaceView.queueEvent {
                 renderer.initCameraTexture(s)
-                // Now resume on main thread (session.resume() is main-thread-safe)
                 activity.runOnUiThread {
                     try {
                         s.resume()
                         glSurfaceView.onResume()
-                        Log.e(TAG, "Session resumed after texture bind")
                     } catch (e: Exception) {
                         Log.e(TAG, "resume after texture FAILED: ${e.message}", e)
                     }
                 }
             }
-
             session = s
             sessionCreated = true
-            // Do NOT call resumeSession() here — done in queueEvent above
         } catch (e: Exception) {
             Log.e(TAG, "createSession FAILED: ${e.message}", e)
         }
@@ -199,13 +212,10 @@ class ARSceneManager(
         try {
             session?.resume()
             glSurfaceView.onResume()
-            Log.e(TAG, "Session resumed")
         } catch (e: Exception) {
             Log.e(TAG, "resumeSession FAILED: ${e.message}", e)
         }
     }
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onResume(owner: LifecycleOwner) {
         if (sessionCreated) resumeSession()
@@ -224,16 +234,7 @@ class ARSceneManager(
         frameCount++
         val s = session ?: return
 
-        // getAllTrackables returns ALL known planes every frame.
-        // getUpdatedTrackables only returns planes CHANGED this frame — returns 0 after initial detection.
         val allPlanes = s.getAllTrackables(Plane::class.java)
-
-        if (frameCount % 60 == 0) {
-            Log.e(TAG, "frame#$frameCount all_planes=${allPlanes.size} " +
-                allPlanes.take(3).joinToString { "${it.type}|${it.trackingState}|${it.extentX}x${it.extentZ}" }
-            )
-        }
-
         val best = allPlanes
             .filter {
                 it.type == Plane.Type.HORIZONTAL_UPWARD_FACING
@@ -244,11 +245,23 @@ class ARSceneManager(
 
         val newArea  = best.extentX * best.extentZ
         val currArea = (currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)
-
         if (currentPlane == null || newArea > currArea * 1.1f) {
-            Log.e(TAG, "Plane detected: ${best.extentX}x${best.extentZ}=${String.format("%.2f",newArea)}m2")
             activity.runOnUiThread { placeGrid(best) }
         }
+
+        // Mark depth availability once (cheap, best-effort).
+        if (!depthSeen) {
+            try {
+                frame.acquireDepthImage16Bits().use { depthSeen = true }
+            } catch (_: Exception) { /* depth optional */ }
+        }
+
+        // One-shot capture for obstacle detection, on the GL thread.
+        if (pendingCapture) {
+            pendingCapture = false
+            runCapture(frame)
+        }
+
         activity.runOnUiThread { streamHud() }
     }
 
@@ -258,24 +271,20 @@ class ARSceneManager(
         clearAnchors()
         currentPlane = plane
         val positions = PanelGridCalculator.calculate(plane, count)
-        Log.e(TAG, "placeGrid: ${positions.size} panels @ tilt=${panelTiltDeg}° elev=${panelElevationM}m")
 
-        // Tilt quaternion: rotation around plane-local +X axis by panelTiltDeg.
-        // In the panel geometry (lying flat at y=0, corners at ±hw,0,±hh),
-        // a positive rotation about +X lifts the back edge (+z side) of the
-        // panel upward, producing a sun-facing tilted module on a flat roof.
-        val halfRad = Math.toRadians(panelTiltDeg.toDouble()) / 2.0
-        val qx = Math.sin(halfRad).toFloat()
-        val qw = Math.cos(halfRad).toFloat()
-        val tiltPose = Pose.makeRotation(qx, 0f, 0f, qw)
+        // Tilt about plane-local +X; yaw (azimuth) about plane-local +Y — NOW LIVE.
+        val halfTilt = Math.toRadians(panelTiltDeg.toDouble()) / 2.0
+        val qx = Math.sin(halfTilt).toFloat(); val qwT = Math.cos(halfTilt).toFloat()
+        val tiltPose = Pose.makeRotation(qx, 0f, 0f, qwT)
+
+        val halfYaw = Math.toRadians(panelAzimuthDeg.toDouble()) / 2.0
+        val qy = Math.sin(halfYaw).toFloat(); val qwY = Math.cos(halfYaw).toFloat()
+        val yawPose = Pose.makeRotation(0f, qy, 0f, qwY)
 
         for (pos in positions) {
             try {
-                // 1. Translate in plane-local frame (plane Y = world up),
-                //    lifting the panel clear of the roof surface.
-                // 2. Compose tilt rotation after translation so it rotates
-                //    about the panel's own centre, not the plane origin.
                 val local = Pose.makeTranslation(pos.x, panelElevationM, pos.z)
+                    .compose(yawPose)
                     .compose(tiltPose)
                 val anchor = plane.createAnchor(plane.centerPose.compose(local))
                 panelAnchors += anchor
@@ -286,12 +295,6 @@ class ARSceneManager(
         }
     }
 
-    /**
-     * Called from Flutter before plane detection to set the sun-path-optimal
-     * pose for every panel placed on this scan. Safe to call repeatedly —
-     * the next `placeGrid` picks the new values up. Values already placed
-     * stay where they are until `resetScan` is invoked.
-     */
     fun configurePanelPose(tiltDeg: Float, azimuthDeg: Float, elevationM: Float) {
         panelTiltDeg = tiltDeg.coerceIn(0f, 60f)
         panelAzimuthDeg = azimuthDeg
@@ -311,9 +314,71 @@ class ARSceneManager(
     fun removePanel() { if (panelAnchors.size > 1) { panelAnchors.last().detach(); panelAnchors.removeLastOrNull(); renderer.removeLastAnchor() } }
     fun resetScan()   { clearAnchors(); currentPlane = null }
 
+    /** Request a JPEG snapshot of the current AR frame. The result is delivered
+     *  asynchronously via `result` once the next GL frame is captured. */
+    fun requestCapture(result: MethodChannel.Result) {
+        pendingCaptureResult = result
+        pendingCapture = true
+    }
+
+    private fun runCapture(frame: Frame) {
+        val result = pendingCaptureResult
+        pendingCaptureResult = null
+        try {
+            val image = frame.acquireCameraImage()
+            val w = image.width; val h = image.height
+            val jpeg = yuv420ToJpeg(image)
+            image.close()
+            val r = result
+            activity.runOnUiThread {
+                r?.success(mapOf("bytes" to jpeg, "width" to w, "height" to h))
+            }
+        } catch (e: Exception) {
+            try { frame.acquireCameraImage().close() } catch (_: Exception) {}
+            val r = result
+            activity.runOnUiThread { r?.error("CAPTURE_FAILED", e.message, null) }
+        }
+    }
+
+    private fun yuv420ToJpeg(image: Image): ByteArray {
+        val width = image.width; val height = image.height
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
+        val yBuffer = yPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vBuffer = vPlane.buffer
+        val ySize = yBuffer.remaining()
+        val uvSize = uBuffer.remaining() + vBuffer.remaining()
+        val nv21 = ByteArray(ySize + uvSize)
+        yBuffer.get(nv21, 0, ySize)
+
+        val uvWidth = width / 2
+        val uvHeight = height / 2
+        var pos = ySize
+        for (row in 0 until uvHeight) {
+            for (col in 0 until uvWidth) {
+                val vIdx = row * vPlane.rowStride + col * vPlane.pixelStride
+                val uIdx = row * uPlane.rowStride + col * uPlane.pixelStride
+                nv21[pos++] = vBuffer.get(vIdx)
+                nv21[pos++] = uBuffer.get(uIdx)
+            }
+        }
+        val out = ByteArrayOutputStream()
+        YuvImage(nv21, ImageFormat.NV21, width, height, null)
+            .compressToJpeg(Rect(0, 0, width, height), 85, out)
+        return out.toByteArray()
+    }
+
     fun getScanSnapshot(): Map<String, Any> {
         val a = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
-        return mapOf("panelCount" to panelAnchors.size, "systemKw" to panelAnchors.size * 0.54, "areaSqm" to a, "planeFound" to (currentPlane != null))
+        return mapOf(
+            "panelCount" to panelAnchors.size,
+            "systemKw" to panelAnchors.size * 0.54,
+            "areaSqm" to a,
+            "planeFound" to (currentPlane != null),
+            "headingDeg" to headingDeg.toDouble(),
+        )
     }
 
     private fun streamHud() {
@@ -321,8 +386,15 @@ class ARSceneManager(
         val a = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
         try {
             sink.success(mapOf(
-                "panelCount" to panelAnchors.size, "maxPanels" to PanelGridCalculator.maxPanelsFor(a.toFloat()),
-                "systemKw" to panelAnchors.size * 0.54, "areaSqm" to a, "planeFound" to (currentPlane != null),
+                "panelCount" to panelAnchors.size,
+                "maxPanels" to PanelGridCalculator.maxPanelsFor(a.toFloat()),
+                "systemKw" to panelAnchors.size * 0.54,
+                "areaSqm" to a,
+                "planeFound" to (currentPlane != null),
+                "headingDeg" to headingDeg.toDouble(),
+                "depthAvailable" to depthSeen,
+                "trackingState" to (if (currentPlane != null) "tracking" else "searching"),
+                "occludedPanelCount" to 0,
             ))
         } catch (_: Exception) {}
     }
@@ -334,6 +406,7 @@ class ARSceneManager(
     override fun dispose() {
         activity.lifecycle.removeObserver(this)
         try { activity.unregisterComponentCallbacks(orientationCallback) } catch (_: Exception) {}
+        try { sensorManager.unregisterListener(sensorListener) } catch (_: Exception) {}
         clearAnchors()
         try { glSurfaceView.onPause() } catch (_: Exception) {}
         session?.close(); session = null

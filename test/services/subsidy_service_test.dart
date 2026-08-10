@@ -53,12 +53,12 @@ void main() {
   });
 
   group('SubsidyService.calculate — gross + net cost', () {
-    test('gross cost follows the ₹75 000 / kW heuristic', () {
+    test('gross cost applies the 2–5 kW tier at ₹72 000 / kW', () {
       final r = service.calculate(
         systemKw: 4.0, stateName: 'gujarat',
         annualKwh: 6000, avgTariff: 7.0,
       );
-      expect(r.estimatedCost, equals(300000));
+      expect(r.estimatedCost, equals(288000));
     });
 
     test('net cost never falls below zero', () {

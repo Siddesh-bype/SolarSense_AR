@@ -91,8 +91,14 @@ class SubsidyService {
         : (stateData['avg_tariff_per_unit'] as num?)?.toDouble() ?? 7.0;
 
     // ── 3. Cost & payback ────────────────────────────────────────────────────
-    // Standard Indian install cost: ₹75,000/kW (panels + inverter + mounting + labour)
-    final estimated = (systemKw * 75000).toInt();
+    // Tiered Indian install cost (panels + inverter + mounting + labour):
+    //   ≤ 2 kW → ₹78,000/kW   (residential sweet spot, higher per-kW)
+    //   2–5 kW → ₹72,000/kW
+    //   > 5 kW → ₹68,000/kW   (economies of scale for larger systems)
+    final perKwCost = systemKw <= 2.0
+        ? 78000
+        : (systemKw <= 5.0 ? 72000 : 68000);
+    final estimated = (systemKw * perKwCost).toInt();
     final total = central + state;
     final net = (estimated - total).clamp(0, estimated).toInt();
     final annualSavings = annualKwh * tariff;

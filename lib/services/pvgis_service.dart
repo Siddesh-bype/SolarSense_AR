@@ -24,10 +24,39 @@ class IrradianceResult {
 const _kFallbackPsh = 4.5;
 const _kFallbackAnnual = 1642.5; // 4.5 × 365
 
+/// Documented system performance ratio (78%) used only for the offline
+/// regional fallback. The live PVGIS `E_y` value already incorporates system
+/// losses (requested with `loss=14`), so it is NOT re-applied there.
+const double _kPerformanceRatio = 0.78;
+
+/// Per-state peak-sun-hours fallback (regionalised India estimates) used when
+/// PVGIS is unreachable. Keyed by the same snake_case state keys as
+/// `state_subsidies.json`. Anything unmapped falls back to [_kFallbackPsh].
+const Map<String, double> _kStateFallbackPsh = {
+  'maharashtra': 4.6,
+  'gujarat': 5.0,
+  'rajasthan': 5.3,
+  'karnataka': 4.7,
+  'tamil_nadu': 4.8,
+  'uttar_pradesh': 4.6,
+  'delhi': 4.9,
+  'telangana': 4.9,
+  'andhra_pradesh': 4.8,
+  'kerala': 4.3,
+  'west_bengal': 4.4,
+  'madhya_pradesh': 4.9,
+  'punjab': 4.8,
+  'haryana': 4.9,
+};
+
 class PvgisService {
   static const _timeout = Duration(seconds: 20);
 
-  Future<IrradianceResult> fetchIrradiance(double lat, double lon) async {
+  Future<IrradianceResult> fetchIrradiance(
+    double lat,
+    double lon, [
+    String? stateKey,
+  ]) async {
     try {
       final uri = Uri.parse(
         'https://re.jrc.ec.europa.eu/api/v5_2/PVcalc'
@@ -36,17 +65,17 @@ class PvgisService {
 
       final response = await http.get(uri).timeout(_timeout);
 
-      if (response.statusCode != 200) return _fallback();
+      if (response.statusCode != 200) return _fallback(stateKey);
 
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final outputs = body['outputs'] as Map<String, dynamic>?;
       final totals = (outputs?['totals'] as Map<String, dynamic>?)?['fixed']
           as Map<String, dynamic>?;
 
-      if (totals == null) return _fallback();
+      if (totals == null) return _fallback(stateKey);
 
       final annualKwh = (totals['E_y'] as num?)?.toDouble();
-      if (annualKwh == null || annualKwh <= 0) return _fallback();
+      if (annualKwh == null || annualKwh <= 0) return _fallback(stateKey);
 
       final psh = annualKwh / 365;
 
@@ -56,13 +85,19 @@ class PvgisService {
         isFallback: false,
       );
     } catch (_) {
-      return _fallback();
+      return _fallback(stateKey);
     }
   }
 
-  IrradianceResult _fallback() => const IrradianceResult(
-        peakSunHours: _kFallbackPsh,
-        annualKwhPerKw: _kFallbackAnnual,
-        isFallback: true,
-      );
+  IrradianceResult _fallback(String? stateKey) {
+    final psh = stateKey == null
+        ? _kFallbackPsh
+        : _kStateFallbackPsh[stateKey.toLowerCase().trim()] ?? _kFallbackPsh;
+    final annual = psh * 365 * _kPerformanceRatio;
+    return IrradianceResult(
+      peakSunHours: double.parse(psh.toStringAsFixed(2)),
+      annualKwhPerKw: double.parse(annual.toStringAsFixed(1)),
+      isFallback: true,
+    );
+  }
 }

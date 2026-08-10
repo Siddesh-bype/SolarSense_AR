@@ -73,6 +73,7 @@ class MainActivity : FlutterFragmentActivity() {
                         "removePanel"     -> { arSceneManager.removePanel(); result.success(null) }
                         "resetScan"       -> { arSceneManager.resetScan();   result.success(null) }
                         "getScanSnapshot" -> result.success(arSceneManager.getScanSnapshot())
+                        "captureFrame"    -> arSceneManager.requestCapture(result)
                         "configurePanelPose" -> {
                             val tilt       = (call.argument<Double>("tiltDeg")     ?: 20.0).toFloat()
                             val azimuth    = (call.argument<Double>("azimuthDeg")  ?: 180.0).toFloat()

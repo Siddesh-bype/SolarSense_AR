@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -119,7 +119,8 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
         panelCount: panelCount,
         avgTariff: avgTariff,
         priceSensitivity: priceSensitivity,
-        cameraFrame: null,
+        cameraFrame: args['cameraFrame'] as Uint8List?,
+        headingDeg: args['headingDeg'] as double?,
       );
 
       // Sanity-cap annual savings: a rooftop system cannot save more than
@@ -169,27 +170,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
     final newPayback = capped > 0
         ? double.parse((r.netCost / capped).toStringAsFixed(2))
         : r.paybackYears;
-    return EnrichedScanResult(
-      totalAreaM2: r.totalAreaM2,
-      usableAreaM2: r.usableAreaM2,
-      panelCount: r.panelCount,
-      systemSizeKw: r.systemSizeKw,
-      peakSunHours: r.peakSunHours,
-      pvgisFallback: r.pvgisFallback,
-      annualKwh: r.annualKwh,
-      centralSubsidy: r.centralSubsidy,
-      stateSubsidy: r.stateSubsidy,
-      totalSubsidy: r.totalSubsidy,
-      estimatedCost: r.estimatedCost,
-      netCost: r.netCost,
-      paybackYears: newPayback,
-      annualSavingsInr: capped,
-      stateDisplayName: r.stateDisplayName,
-      statePortal: r.statePortal,
-      stateNotes: r.stateNotes,
-      brandRecommendations: r.brandRecommendations,
-      detectedObstacles: r.detectedObstacles,
-    );
+    return r.copyWith(annualSavingsInr: capped, paybackYears: newPayback);
   }
 
   @override

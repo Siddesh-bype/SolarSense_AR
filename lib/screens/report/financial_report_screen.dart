@@ -3,10 +3,9 @@ import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/enriched_scan_result.dart';
-import '../../services/report_api_service.dart';
+import '../../services/report_service.dart';
 import '../../services/user_session.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../widgets/solar_panel_3d.dart';
 
 class FinancialReportScreen extends StatefulWidget {
   const FinancialReportScreen({super.key});
@@ -51,7 +50,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
   Future<void> _download(EnrichedScanResult data) async {
     setState(() => _downloading = true);
     try {
-      final path = await ReportApiService.instance.generateAndDownload(data);
+      final path = await ReportService.instance.generateAndDownload(data);
       _lastPdfPath = path;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,11 +210,12 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
               SizedBox(
                 width: 80,
                 height: 80,
-                child: SolarPanel3DWidget(
-                  panelCount: data.panelCount,
-                  size: 80,
-                  // Tiny hero tile — static render, no shimmer ticker.
-                  animate: false,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.solar_power_outlined, color: Colors.white, size: 44),
                 ),
               )
             ],

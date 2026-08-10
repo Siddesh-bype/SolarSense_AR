@@ -30,6 +30,7 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   double _systemKw   = 0;
   double _areaSqm    = 0;
   bool   _planeFound = false;
+  double _headingDeg = 0;   // compass heading streamed from native
 
   // ── Camera permission ───────────────────────────────────────────────────
   // null  → not yet known (assume granted-until-told-otherwise)
@@ -73,6 +74,7 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
         _systemKw   = (event['systemKw']   as double?) ?? _systemKw;
         _areaSqm    = (event['areaSqm']    as double?) ?? _areaSqm;
         _planeFound = (event['planeFound'] as bool?)  ?? _planeFound;
+        _headingDeg = (event['headingDeg'] as double?) ?? _headingDeg;
 
         // Permission events are emitted on grant/deny only — absent keys
         // mean this is a normal HUD frame.
@@ -112,11 +114,45 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
           'panelCount': snapshot['panelCount'] ?? _panelCount,
           'systemKw'  : snapshot['systemKw']   ?? _systemKw,
           'areaSqm'   : snapshot['areaSqm']    ?? _areaSqm,
+          'headingDeg': snapshot['headingDeg'] ?? _headingDeg,
         },
       );
     } catch (_) {
       // If Kotlin side not ready, navigate anyway
       if (mounted) Navigator.pushReplacementNamed(context, '/scan/loading');
+    }
+  }
+
+  /// Captures a real camera frame and forwards it to the analysis pipeline so
+  /// on-device obstacle detection runs. Falls back to demo-mode detection if
+  /// the capture fails (the service handles a missing frame gracefully).
+  Future<void> _scanObstacles() async {
+    try {
+      final Map? frame =
+          await _kMethodCh.invokeMethod('captureFrame') as Map?;
+      final bytes = frame?['bytes'] as Uint8List?;
+      final Map snapshot = await _kMethodCh.invokeMethod('getScanSnapshot') ?? {};
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        '/scan/loading',
+        arguments: {
+          'panelCount': snapshot['panelCount'] ?? _panelCount,
+          'systemKw'  : snapshot['systemKw']   ?? _systemKw,
+          'areaSqm'   : snapshot['areaSqm']    ?? _areaSqm,
+          'headingDeg': snapshot['headingDeg'] ?? _headingDeg,
+          'cameraFrame': bytes,
+        },
+      );
+    } catch (_) {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/scan/loading', arguments: {
+          'panelCount': _panelCount,
+          'systemKw': _systemKw,
+          'areaSqm': _areaSqm,
+          'headingDeg': _headingDeg,
+        });
+      }
     }
   }
 
@@ -197,6 +233,7 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
                 panelCount: _panelCount,
                 maxPanels: _maxPanels,
                 systemKw: _systemKw,
+                headingDeg: _headingDeg,
               ),
             ),
 
@@ -226,6 +263,7 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
               safeBot: safeBot,
               planeFound: _planeFound,
               onCapture: _capture,
+              onDetect: _scanObstacles,
               onReset: _resetScan,
             ),
           ),
@@ -333,7 +371,7 @@ class _TopBar extends StatelessWidget {
 }
 
 class _StatsRow extends StatelessWidget {
-  final double areaSqm, systemKw;
+  final double areaSqm, systemKw, headingDeg;
   final int panelCount, maxPanels;
 
   const _StatsRow({
@@ -341,10 +379,14 @@ class _StatsRow extends StatelessWidget {
     required this.systemKw,
     required this.panelCount,
     required this.maxPanels,
+    this.headingDeg = 0,
   });
 
   @override
   Widget build(BuildContext context) {
+    final compass = headingDeg > 0
+        ? '${(headingDeg % 360).toStringAsFixed(0)}°'
+        : '—';
     return Row(
       children: [
         _Chip(
@@ -366,6 +408,13 @@ class _StatsRow extends StatelessWidget {
           label: 'System',
           value: '${systemKw.toStringAsFixed(1)} kW',
           color: const Color(0xFF29B6F6),
+        ),
+        const SizedBox(width: 8),
+        _Chip(
+          icon: Icons.explore,
+          label: 'Heading',
+          value: compass,
+          color: const Color(0xFFAB47BC),
         ),
       ],
     );
@@ -459,12 +508,13 @@ class _Sidebar extends StatelessWidget {
 class _ShutterBar extends StatelessWidget {
   final double safeBot;
   final bool planeFound;
-  final VoidCallback onCapture, onReset;
+  final VoidCallback onCapture, onDetect, onReset;
 
   const _ShutterBar({
     required this.safeBot,
     required this.planeFound,
     required this.onCapture,
+    required this.onDetect,
     required this.onReset,
   });
 
@@ -483,6 +533,11 @@ class _ShutterBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _BarAction(icon: Icons.restart_alt, label: 'RESET', onTap: onReset),
+          _BarAction(
+            icon: Icons.visibility_outlined,
+            label: 'DETECT',
+            onTap: planeFound ? () => onDetect() : null,
+          ),
           // Shutter
           GestureDetector(
             onTap: onCapture,
@@ -520,7 +575,6 @@ class _ShutterBar extends StatelessWidget {
               ),
             ),
           ),
-          _BarAction(icon: Icons.photo_library, label: 'GALLERY', onTap: () {}),
         ],
       ),
     );

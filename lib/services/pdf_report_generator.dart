@@ -16,6 +16,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/enriched_scan_result.dart';
+import '../core/solar/monthly_profile.dart';
 import 'user_session.dart';
 
 class PdfReportGenerator {
@@ -209,6 +210,7 @@ class PdfReportGenerator {
     return [
       ..._executiveSummary(ctx),
       ..._rooftopAnalysis(ctx),
+      ..._arSnapshot(ctx),
       ..._systemDesign(ctx),
       ..._energyEstimate(ctx),
       ..._costBreakdown(ctx),
@@ -282,6 +284,46 @@ class PdfReportGenerator {
       _para(
         '<b>Panel Layout:</b> ${c.panelCount} panels arranged for maximum '
         'sun exposure, south-facing at 18° tilt.',
+      ),
+      pw.SizedBox(height: 10),
+    ];
+  }
+
+  // ── Section 2b: AR capture snapshot ──────────────────────────────────────
+  List<pw.Widget> _arSnapshot(_ReportContext c) {
+    final bytes = c.arSnapshot;
+    if (bytes == null || bytes.isEmpty) return [];
+    pw.ImageProvider? img;
+    try {
+      img = pw.MemoryImage(bytes);
+    } catch (_) {
+      return [];
+    }
+    final heading = c.scanHeadingDeg;
+    final headingTxt = heading != null
+        ? '  •  Captured facing ${heading.round()}° (compass)'
+        : '';
+    return [
+      _sectionTitle('2b. AR Rooftop Capture'),
+      _divider(),
+      _para(
+        'The image below is the AR snapshot taken during your on-device scan. '
+        'Panel placement and obstacle detection run directly on this frame — no '
+        'photo leaves the device.$headingTxt',
+      ),
+      pw.SizedBox(height: 8),
+      pw.Container(
+        height: 180,
+        width: double.infinity,
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: _softBorder, width: 0.5),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.ClipRRect(
+          horizontalRadius: 6,
+          verticalRadius: 6,
+          child: pw.Image(img!, fit: pw.BoxFit.cover),
+        ),
       ),
       pw.SizedBox(height: 10),
     ];
@@ -1286,8 +1328,10 @@ class _ReportContext {
 
   final String obstacleDesc;
 
-  _ReportContext({
-    required this.reportId,
+  final Uint8List? arSnapshot; // AR camera capture embedded in the report
+  final double? scanHeadingDeg; // compass heading at scan time
+
+  _ReportContext({    required this.reportId,
     required this.now,
     required this.staticData,
     required this.userName,
@@ -1319,6 +1363,8 @@ class _ReportContext {
     required this.co2Lifetime,
     required this.treesEquivalent,
     required this.obstacleDesc,
+    required this.arSnapshot,
+    required this.scanHeadingDeg,
   });
 
   static _ReportContext from({
@@ -1359,11 +1405,11 @@ class _ReportContext {
         ? (scan.totalSubsidy / scan.estimatedCost) * 100
         : 0.0;
 
-    // Seasonal curve — India.
-    const curve = [
-      0.87, 0.94, 1.04, 1.12, 1.16, 0.99,
-      0.79, 0.83, 0.96, 1.08, 1.02, 0.96,
-    ];
+    // Latitude-aware seasonal curve — replaces the previous hardcoded India
+    // curve. Uses the scan latitude; falls back to the 20°N India mean when
+    // latitude is unknown. Monsoon attenuation (Jun–Aug) is applied for India.
+    final lat = scan.lat ?? 20.0;
+    final curve = monthlyGenerationProfile(lat, indiaMonsoonAdjust: true);
     final avg = scan.annualKwh / 12;
     final monthly = curve.map((k) => (avg * k).round()).toList();
 
@@ -1427,6 +1473,8 @@ class _ReportContext {
       co2Lifetime: co2Lifetime,
       treesEquivalent: trees,
       obstacleDesc: obstacleDesc,
+      arSnapshot: scan.captureJpeg,
+      scanHeadingDeg: scan.headingDeg,
     );
   }
 }

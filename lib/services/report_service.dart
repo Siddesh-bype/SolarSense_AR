@@ -1,4 +1,4 @@
-// lib/services/report_api_service.dart
+// lib/services/report_service.dart
 //
 // Fully on-device report generation. No HTTP, no server.
 // Wraps PdfReportGenerator, writes the PDF bytes to device storage,
@@ -12,9 +12,9 @@ import 'package:path_provider/path_provider.dart';
 import '../models/enriched_scan_result.dart';
 import 'pdf_report_generator.dart';
 
-class ReportApiService {
-  ReportApiService._();
-  static final ReportApiService instance = ReportApiService._();
+class ReportService {
+  ReportService._();
+  static final ReportService instance = ReportService._();
 
   /// Generate the PDF on device and save it. Returns the file path.
   Future<String> generateAndDownload(EnrichedScanResult data) async {
