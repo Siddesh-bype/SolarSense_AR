@@ -1,7 +1,12 @@
 package com.example.solarmitra
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.opengl.Matrix
 import android.util.Log
 import android.view.Surface
@@ -19,12 +24,12 @@ import javax.microedition.khronos.opengles.GL10
 /**
  * Raw OpenGL ES 2.0 renderer for the ARCore camera feed + 3D solar panels.
  *
- * Panels are now drawn as extruded 3D boxes (top face + 4 side walls) with a
- * cell grid on the top surface, instead of the previous flat coloured quad —
- * so they read as real raised modules under the camera. Each panel carries an
- * occlusion alpha (default 1.0) that the scene manager can dim when a panel is
- * behind real-world geometry (depth occlusion). All geometry is transformed by
- * the ARCore anchor pose, so tilt/azimuth/elevation from Dart all apply.
+ * Panels are drawn as extruded 3D modules: a silver aluminium bezel, a
+ * textured photovoltaic glass top (procedurally generated blue cell grid with
+ * busbars), 4 side walls and a thin outer frame. Panel width/height are
+ * configurable so the Dart side can present different panel sizes the user can
+ * switch between. All geometry is transformed by the ARCore anchor pose, so
+ * tilt/azimuth/elevation from Dart all apply.
  */
 class ARRenderer(
     private val context: Context,
@@ -34,19 +39,20 @@ class ARRenderer(
 
     companion object {
         private const val TAG = "SolarMitra"
-        private val PANEL_COLOR = floatArrayOf(0.09f, 0.18f, 0.42f, 1.00f)
         private val SIDE_COLOR  = floatArrayOf(0.05f, 0.10f, 0.24f, 1.00f)
-        private val FRAME_COLOR = floatArrayOf(0.85f, 0.85f, 0.85f, 1.00f)
-        private val CELL_COLOR  = floatArrayOf(0.35f, 0.45f, 0.70f, 0.55f)
-        private const val PANEL_W = 1.70f
-        private const val PANEL_H = 1.14f
+        private val FRAME_COLOR = floatArrayOf(0.72f, 0.75f, 0.79f, 1.00f)
         private const val THICK   = 0.06f // panel box thickness (m)
+
+        // Default PV module (540 Wp mono-PERC, landscape).
+        private const val DEFAULT_W = 1.70f
+        private const val DEFAULT_H = 1.14f
     }
 
     var onSurfaceReadyCallback: (() -> Unit)? = null
 
     private var session: Session? = null
     private val cameraTexId = IntArray(1)
+    private var panelTexId = 0
     private val anchors = mutableListOf<Anchor>()
     private val panelAlphas = mutableListOf<Float>()
 
@@ -60,26 +66,45 @@ class ARRenderer(
     private val projMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
 
-    // Top face (flat rect) — used for both fill and cell grid.
-    private val topVerts: FloatBuffer
-    // 4 side walls, each a quad, as TRIANGLE_FAN (4 verts × 4 walls).
-    private val sideVerts: FloatBuffer
+    // Panel module dimensions (m).
+    @Volatile private var panelW = DEFAULT_W
+    @Volatile private var panelH = DEFAULT_H
+    @Volatile private var geometryDirty = true
 
+    // Rebuilt geometry (top face, 4 walls, 2 UV triangles, breaker ring).
+    private var topVerts: FloatBuffer = ByteBuffer.allocateDirect(0).asFloatBuffer()
+    private var sideVerts: FloatBuffer = ByteBuffer.allocateDirect(0).asFloatBuffer()
+    private var topUVs: FloatBuffer = ByteBuffer.allocateDirect(0).asFloatBuffer()
+    private var trimVerts: FloatBuffer = ByteBuffer.allocateDirect(0).asFloatBuffer()
+
+    // Camera background quad.
     private val quadCoords = floatArrayOf(-1f,-1f, 1f,-1f, -1f,1f, 1f,1f)
     private val quadUVs    = floatArrayOf( 0f, 1f, 1f, 1f,  0f,0f, 1f,0f)
     private lateinit var quadCoordsBuffer: FloatBuffer
     private lateinit var quadUVsBuffer: FloatBuffer
 
-    // Cell grid lines on the top face (6 columns × 4 rows).
-    private val cellLines: FloatBuffer
+    fun setPanelSize(widthM: Float, heightM: Float) {
+        val w = widthM.coerceIn(0.8f, 3.0f)
+        val h = heightM.coerceIn(0.5f, 2.2f)
+        if (w != panelW || h != panelH) {
+            panelW = w; panelH = h
+            geometryDirty = true
+        }
+    }
 
-    init {
-        val hw = PANEL_W / 2f; val hh = PANEL_H / 2f; val t = THICK
-        // Top face
-        val top = floatArrayOf(-hw,0f,-hh, hw,0f,-hh, hw,0f,hh, -hw,0f,hh)
-        topVerts = buf(top)
+    private fun rebuildGeometry() {
+        val hw = panelW / 2f; val hh = panelH / 2f; val t = THICK
+        // Top face — split into two triangles (clockwise winding, CCW normal +Y)
+        topVerts = buf(floatArrayOf(
+            -hw,0f,-hh,  hw,0f,-hh,  hw,0f,hh,
+            -hw,0f,-hh,  hw,0f,hh,  -hw,0f,hh,
+        ))
+        topUVs = buf(floatArrayOf(
+            0f,0f,  1f,0f,  1f,1f,
+            0f,0f,  1f,1f,  0f,1f,
+        ))
         // Side walls (top edge → bottom edge at y=-t)
-        val sides = floatArrayOf(
+        sideVerts = buf(floatArrayOf(
             // front (z=-hh)
             -hw,0f,-hh,  hw,0f,-hh,  hw,-t,-hh,  -hw,-t,-hh,
             // right (x=hw)
@@ -88,20 +113,16 @@ class ARRenderer(
              hw,0f, hh, -hw,0f, hh, -hw,-t, hh,  hw,-t, hh,
             // left (x=-hw)
             -hw,0f, hh, -hw,0f,-hh, -hw,-t,-hh, -hw,-t, hh,
-        )
-        sideVerts = buf(sides)
-        // Cell grid
-        val cells = mutableListOf<Float>()
-        val cols = 6; val rows = 4
-        for (i in 0..cols) {
-            val x = -hw + (PANEL_W * i / cols)
-            cells += x; 0f; -hh;  x; 0f; hh
-        }
-        for (j in 0..rows) {
-            val z = -hh + (PANEL_H * j / rows)
-            cells += -hw; 0f; z;  hw; 0f; z
-        }
-        cellLines = buf(cells.toFloatArray())
+        ))
+        // Outer aluminium trim — a raised bevelled ring (4 line segments).
+        val tw = 0.045f
+        trimVerts = buf(floatArrayOf(
+            -hw-tw, 0.012f, -hh-tw,  hw+tw, 0.012f, -hh-tw,
+             hw+tw, 0.012f, -hh-tw,  hw+tw, 0.012f,  hh+tw,
+             hw+tw, 0.012f,  hh+tw, -hw-tw, 0.012f,  hh+tw,
+            -hw-tw, 0.012f,  hh+tw, -hw-tw, 0.012f, -hh-tw,
+        ))
+        geometryDirty = false
     }
 
     fun initCameraTexture(s: Session) {
@@ -145,6 +166,8 @@ class ARRenderer(
         objProgram = buildProgram(OBJ_VERT, OBJ_FRAG)
         quadCoordsBuffer = buf(quadCoords)
         quadUVsBuffer    = buf(quadUVs)
+        panelTexId = buildSolarPanelTexture()
+        geometryDirty = true
         onSurfaceReadyCallback?.invoke()
     }
 
@@ -171,7 +194,7 @@ class ARRenderer(
         frame.camera.getViewMatrix(viewMatrix, 0)
         onFrameCallback(frame)
         if (frame.camera.trackingState == TrackingState.TRACKING) {
-            synchronized(this) { drawPanels() }
+            synchronized(this) { if (geometryDirty) rebuildGeometry(); drawPanels() }
         }
     }
 
@@ -202,13 +225,21 @@ class ARRenderer(
         GLES20.glEnable(GLES20.GL_BLEND)
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
+        GLES20.glDepthMask(false) // panels blend against the camera feed
 
         val vp = FloatArray(16).also { Matrix.multiplyMM(it, 0, projMatrix, 0, viewMatrix, 0) }
-        val mvpLoc   = GLES20.glGetUniformLocation(objProgram, "u_MVP")
-        val colorLoc = GLES20.glGetUniformLocation(objProgram, "u_Color")
-        val posLoc   = GLES20.glGetAttribLocation(objProgram, "a_Position")
+        val mvpLoc    = GLES20.glGetUniformLocation(objProgram, "u_MVP")
+        val colorLoc  = GLES20.glGetUniformLocation(objProgram, "u_Color")
+        val posLoc    = GLES20.glGetAttribLocation(objProgram, "a_Position")
+        val uvLoc     = GLES20.glGetAttribLocation(objProgram, "a_TexCoord")
+        val useTexLoc = GLES20.glGetUniformLocation(objProgram, "u_useTexture")
+
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, panelTexId)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(objProgram, "u_Texture"), 1)
 
         GLES20.glEnableVertexAttribArray(posLoc)
+        GLES20.glEnableVertexAttribArray(uvLoc)
 
         for ((i, anchor) in anchors.withIndex()) {
             if (anchor.trackingState != TrackingState.TRACKING) continue
@@ -217,32 +248,33 @@ class ARRenderer(
             val mvp   = FloatArray(16).also { Matrix.multiplyMM(it, 0, vp, 0, model, 0) }
             GLES20.glUniformMatrix4fv(mvpLoc, 1, false, mvp, 0)
 
-            // Side walls (darker)
+            // 1) Solid side walls (darker underside)
+            GLES20.glUniform1i(useTexLoc, 0)
             GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 0, sideVerts)
+            GLES20.glVertexAttribPointer(uvLoc, 2, GLES20.GL_FLOAT, false, 0, topUVs)
             GLES20.glUniform4fv(colorLoc, 1, tint(SIDE_COLOR, alpha), 0)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, 4)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 4, 4)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 8, 4)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 12, 4)
 
-            // Top face (panel colour)
+            // 2) Textured photovoltaic glass top
+            GLES20.glUniform1i(useTexLoc, 1)
             GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 0, topVerts)
-            GLES20.glUniform4fv(colorLoc, 1, tint(PANEL_COLOR, alpha), 0)
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, 4)
+            GLES20.glVertexAttribPointer(uvLoc, 2, GLES20.GL_FLOAT, false, 0, topUVs)
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6)
 
-            // Cell grid on top
-            GLES20.glUniform4fv(colorLoc, 1, tint(CELL_COLOR, alpha), 0)
-            GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 0, cellLines)
-            GLES20.glDrawArrays(GLES20.GL_LINES, 0, cellLines.capacity() / 3)
-
-            // Outline
+            // 3) Aluminium trim ring (raised bevelled edge)
+            GLES20.glUniform1i(useTexLoc, 0)
             GLES20.glUniform4fv(colorLoc, 1, tint(FRAME_COLOR, alpha), 0)
-            GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 0, topVerts)
-            GLES20.glDrawArrays(GLES20.GL_LINE_LOOP, 0, 4)
+            GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 0, trimVerts)
+            GLES20.glDrawArrays(GLES20.GL_LINE_LOOP, 0, trimVerts.capacity() / 3)
         }
 
         GLES20.glDisableVertexAttribArray(posLoc)
+        GLES20.glDisableVertexAttribArray(uvLoc)
         GLES20.glDisable(GLES20.GL_BLEND)
+        GLES20.glDepthMask(true)
     }
 
     // Tint helper: scale rgb by alpha, keep/compute a (alpha).
@@ -250,6 +282,59 @@ class ARRenderer(
     private fun tint(src: FloatArray, alpha: Float): FloatArray {
         _tinted[0] = src[0]; _tinted[1] = src[1]; _tinted[2] = src[2]; _tinted[3] = src[3] * alpha
         return _tinted
+    }
+
+    // ── Photovoltaic glass texture (procedural) ─────────────────────────────
+    private fun buildSolarPanelTexture(): Int {
+        val size = 256
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val px = size.toFloat()
+
+        // Base glass — deep blue.
+        c.drawColor(0xFF14315A.toInt())
+
+        // Row of photovoltaic cells (6 × 4) with dark blue fill and silver edges.
+        val cols = 6; val rows = 4
+        val cellW = px / cols; val cellH = px / rows
+        val cellFill = Paint().apply { color = 0xFF0E2B32.toInt() }
+        val cellSheen = Paint().apply { color = 0xFF1D4E9E.toInt() }
+        val busbar = Paint().apply { strokeWidth = px * 0.012f; color = 0xFFD8DEE6.toInt() }
+        val edge = Paint().apply { style = Paint.Style.STROKE; strokeWidth = px * 0.008f; color = 0xFF6A87B0.toInt() }
+
+        for (r in 0 until rows) {
+            for (col in 0 until cols) {
+                val l = col * cellW; val t = r * cellH
+                val rect = RectF(l + 2f, t + 2f, l + cellW - 2f, t + cellH - 2f)
+                c.drawRect(rect, cellFill)
+                c.drawRect(rect, edge)
+                // Diagonal glass sheen so the module reads as reflective glass.
+                c.drawRect(
+                    RectF(l + 2f, t + 2f, l + cellW - 2f, t + cellH * 0.45f),
+                    cellSheen,
+                )
+                // Vertical busbars down each cell.
+                for (i in 0..3) {
+                    val bx = l + cellW * (0.25f + 0.25f * i)
+                    c.drawLine(bx, t + 3f, bx, t + cellH - 3f, busbar)
+                }
+            }
+        }
+
+        // Aluminium frame around the module.
+        val fp = Paint().apply { style = Paint.Style.STROKE; strokeWidth = px * 0.035f; color = 0xFFB8C0C9.toInt() }
+        c.drawRect(2f, 2f, px - 2f, px - 2f, fp)
+
+        val tex = IntArray(1)
+        GLES20.glGenTextures(1, tex, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tex[0])
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_REPEAT)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_REPEAT)
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
+        bmp.recycle()
+        return tex[0]
     }
 
     private fun buildProgram(vert: String, frag: String): Int {
@@ -279,13 +364,24 @@ class ARRenderer(
 
     private val OBJ_VERT = """
         attribute vec4 a_Position;
+        attribute vec2 a_TexCoord;
         uniform mat4 u_MVP;
-        void main() { gl_Position = u_MVP * a_Position; }
+        varying vec2 v_TexCoord;
+        void main() { gl_Position = u_MVP * a_Position; v_TexCoord = a_TexCoord; }
     """.trimIndent()
 
     private val OBJ_FRAG = """
         precision mediump float;
         uniform vec4 u_Color;
-        void main() { gl_FragColor = u_Color; }
+        uniform int  u_useTexture;
+        uniform sampler2D u_Texture;
+        varying vec2 v_TexCoord;
+        void main() {
+            if (u_useTexture == 1) {
+                gl_FragColor = texture2D(u_Texture, v_TexCoord);
+            } else {
+                gl_FragColor = u_Color;
+            }
+        }
     """.trimIndent()
 }

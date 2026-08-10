@@ -44,7 +44,7 @@ void main() {
   test('seasonal swing grows with latitude', () {
     final low = monthlyGenerationProfile(10.0, indiaMonsoonAdjust: false);
     final high = monthlyGenerationProfile(28.0, indiaMonsoonAdjust: false);
-    final spread = (List<double> p) => p.reduce((a, b) => a > b ? a : b) -
+    double spread(List<double> p) => p.reduce((a, b) => a > b ? a : b) -
         p.reduce((a, b) => a < b ? a : b);
     expect(spread(high), greaterThan(spread(low)));
   });

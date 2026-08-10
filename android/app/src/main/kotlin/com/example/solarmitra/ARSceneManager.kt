@@ -83,11 +83,21 @@ class ARSceneManager(
     private val panelAnchors = mutableListOf<com.google.ar.core.Anchor>()
     private var frameCount = 0
     private var depthSeen = false
+    private var lastHudEmittedMs = 0L    // throttle HUD stream to ~12 Hz
 
     // Sun-path-driven placement — configured from Flutter before plane detection.
     private var panelTiltDeg = 18.3f      // SunPath.optimalTiltDeg(20)
     private var panelAzimuthDeg = 180f    // NOW APPLIED — yaw about plane-local +Y
     private var panelElevationM = 0.45f
+
+    // Panel module size + layout — user-configurable from the AR screen.
+    private var panelSpec = PanelGridCalculator.FlexSpec(
+        PanelGridCalculator.PANEL_W,
+        PanelGridCalculator.PANEL_D,
+        PanelLayout.AUTO,
+    )
+    private var lastPlaneCenter = floatArrayOf(0f, 0f, 0f)
+    private var lastPlaneArea = 0f
 
     var eventSink: EventChannel.EventSink? = null
 
@@ -244,8 +254,16 @@ class ARSceneManager(
             .maxByOrNull { it.extentX * it.extentZ } ?: return
 
         val newArea  = best.extentX * best.extentZ
-        val currArea = (currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)
-        if (currentPlane == null || newArea > currArea * 1.1f) {
+        val center = best.centerPose.translation
+        val delta = lastPlaneArea == 0f || newArea > lastPlaneArea * 1.05f ||
+            distance(center, lastPlaneCenter) > 0.4f
+
+        // Re-place the grid when the detected roof region grows or the phone is
+        // swept across a larger area — keeps panels glued to the best region.
+        val shouldReposition = currentPlane == null || delta
+        if (shouldReposition) {
+            lastPlaneCenter = center.clone()
+            lastPlaneArea = newArea
             activity.runOnUiThread { placeGrid(best) }
         }
 
@@ -262,7 +280,19 @@ class ARSceneManager(
             runCapture(frame)
         }
 
-        activity.runOnUiThread { streamHud() }
+        // HUD updates are expensive to push through the binary messenger (Map
+        // alloc + main-thread hop per frame). Throttle to ~12 Hz — plenty for a
+        // live meter readout, and removes ~48 cross-thread posts per second.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastHudEmittedMs >= 80) {
+            lastHudEmittedMs = now
+            activity.runOnUiThread { streamHud() }
+        }
+    }
+
+    private fun distance(a: FloatArray, b: FloatArray): Float {
+        val dx = a[0] - b[0]; val dy = a[1] - b[1]; val dz = a[2] - b[2]
+        return kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
     }
 
     // ── Grid ──────────────────────────────────────────────────────────────────
@@ -270,7 +300,8 @@ class ARSceneManager(
     private fun placeGrid(plane: Plane, count: Int? = null) {
         clearAnchors()
         currentPlane = plane
-        val positions = PanelGridCalculator.calculate(plane, count)
+        val positions = PanelGridCalculator.calculate(plane, count, panelSpec)
+        renderer.setPanelSize(panelSpec.widthM, panelSpec.heightM)
 
         // Tilt about plane-local +X; yaw (azimuth) about plane-local +Y — NOW LIVE.
         val halfTilt = Math.toRadians(panelTiltDeg.toDouble()) / 2.0
@@ -301,6 +332,28 @@ class ARSceneManager(
         panelElevationM = elevationM.coerceIn(0f, 2.5f)
         Log.e(TAG, "configurePanelPose: tilt=${panelTiltDeg}° az=${panelAzimuthDeg}° elev=${panelElevationM}m")
     }
+
+    /** Switch module size/orientation live. Re-places the grid so the new
+     *  size applies immediately to the currently detected plane. */
+    fun configurePanelFlex(widthM: Float, heightM: Float, layoutName: String?) {
+        panelSpec = PanelGridCalculator.FlexSpec(
+            widthM, heightM,
+            when (layoutName) {
+                "portrait"  -> PanelLayout.PORTRAIT
+                "landscape" -> PanelLayout.LANDSCAPE
+                else        -> PanelLayout.AUTO
+            },
+        )
+        currentPlane?.let { activity.runOnUiThread { placeGrid(it, panelAnchors.size) } }
+        Log.e(TAG, "configurePanelFlex: ${widthM}x${heightM} $layoutName")
+    }
+
+    /// Peak power (kW) per module, scaled with module area (≈470 Wp for the
+    /// default 1.7×1.14 m module → area-scaled for larger/smaller modules).
+    /// Feeds the HUD + scan snapshot so the financial engine sees the actual
+    /// module size the user placed.
+    private val perPanelKw: Double
+        get() = (0.470 * (panelSpec.widthM * panelSpec.heightM) / (PanelGridCalculator.PANEL_W * PanelGridCalculator.PANEL_D))
 
     private fun clearAnchors() {
         panelAnchors.forEach { it.detach() }
@@ -374,7 +427,7 @@ class ARSceneManager(
         val a = ((currentPlane?.extentX ?: 0f) * (currentPlane?.extentZ ?: 0f)).toDouble()
         return mapOf(
             "panelCount" to panelAnchors.size,
-            "systemKw" to panelAnchors.size * 0.54,
+            "systemKw" to (panelAnchors.size * perPanelKw),
             "areaSqm" to a,
             "planeFound" to (currentPlane != null),
             "headingDeg" to headingDeg.toDouble(),
@@ -387,14 +440,17 @@ class ARSceneManager(
         try {
             sink.success(mapOf(
                 "panelCount" to panelAnchors.size,
-                "maxPanels" to PanelGridCalculator.maxPanelsFor(a.toFloat()),
-                "systemKw" to panelAnchors.size * 0.54,
+                "maxPanels" to PanelGridCalculator.maxPanelsFor(a.toFloat(), panelSpec),
+                "systemKw" to (panelAnchors.size * perPanelKw),
                 "areaSqm" to a,
                 "planeFound" to (currentPlane != null),
                 "headingDeg" to headingDeg.toDouble(),
                 "depthAvailable" to depthSeen,
                 "trackingState" to (if (currentPlane != null) "tracking" else "searching"),
                 "occludedPanelCount" to 0,
+                "panelWidthM" to panelSpec.widthM.toDouble(),
+                "panelHeightM" to panelSpec.heightM.toDouble(),
+                "panelLayout" to panelSpec.layout.name,
             ))
         } catch (_: Exception) {}
     }

@@ -322,7 +322,7 @@ class PdfReportGenerator {
         child: pw.ClipRRect(
           horizontalRadius: 6,
           verticalRadius: 6,
-          child: pw.Image(img!, fit: pw.BoxFit.cover),
+          child: pw.Image(img, fit: pw.BoxFit.cover),
         ),
       ),
       pw.SizedBox(height: 10),

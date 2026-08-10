@@ -103,6 +103,14 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   Future<void> _removePanel() => _kMethodCh.invokeMethod('removePanel');
   Future<void> _resetScan()   => _kMethodCh.invokeMethod('resetScan');
 
+  /// Switches the live 3D module size + layout on the native side.
+  Future<void> _setPanelFlex({double widthM = 1.70, double heightM = 1.14, String? layout}) {
+    return _kMethodCh.invokeMethod(
+      'configurePanelFlex',
+      {'widthM': widthM, 'heightM': heightM, 'layout': layout},
+    );
+  }
+
   Future<void> _capture() async {
     try {
       final Map snapshot = await _kMethodCh.invokeMethod('getScanSnapshot') ?? {};
@@ -121,6 +129,29 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
       // If Kotlin side not ready, navigate anyway
       if (mounted) Navigator.pushReplacementNamed(context, '/scan/loading');
     }
+  }
+
+  // ── Panel style (size + layout) ──────────────────────────────────────────
+  static const _panelSizes = [
+    (name: 'Standard 540W', width: 1.70, height: 1.14),
+    (name: 'Compact 460W',  width: 1.60, height: 1.00),
+    (name: 'Large 700W',    width: 2.00, height: 1.30),
+  ];
+  static const _layouts = [
+    (name: 'Auto',        native: null),
+    (name: 'Landscape',   native: 'landscape'),
+    (name: 'Portrait',    native: 'portrait'),
+  ];
+  int _panelSizeIndex = 0;
+  int _layoutIndex = 0;
+
+  void _applyPanelStyle() {
+    final size = _panelSizes[_panelSizeIndex];
+    _setPanelFlex(
+      widthM: size.width,
+      heightM: size.height,
+      layout: _layouts[_layoutIndex].native,
+    );
   }
 
   /// Captures a real camera frame and forwards it to the analysis pipeline so
@@ -162,7 +193,6 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBot = MediaQuery.of(context).padding.bottom;
-    final screenW = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -234,6 +264,27 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
                 maxPanels: _maxPanels,
                 systemKw: _systemKw,
                 headingDeg: _headingDeg,
+              ),
+            ),
+
+          // ── Layer 4b: Panel size + layout switcher ─────────────────────────
+          if (_planeFound)
+            Positioned(
+              top: safeTop + 146,
+              left: 12, right: 12,
+              child: _PanelStyleBar(
+                sizes: _panelSizes.map((s) => s.name).toList(),
+                layouts: _layouts.map((l) => l.name).toList(),
+                sizeIndex: _panelSizeIndex,
+                layoutIndex: _layoutIndex,
+                onSizeChanged: (i) {
+                  setState(() => _panelSizeIndex = i);
+                  _applyPanelStyle();
+                },
+                onLayoutChanged: (i) {
+                  setState(() => _layoutIndex = i);
+                  _applyPanelStyle();
+                },
               ),
             ),
 
@@ -716,6 +767,127 @@ class _GlassBtn extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Panel module size + layout switcher that drives the native 3D grid.
+class _PanelStyleBar extends StatelessWidget {
+  final List<String> sizes, layouts;
+  final int sizeIndex, layoutIndex;
+  final ValueChanged<int> onSizeChanged, onLayoutChanged;
+
+  const _PanelStyleBar({
+    required this.sizes,
+    required this.layouts,
+    required this.sizeIndex,
+    required this.layoutIndex,
+    required this.onSizeChanged,
+    required this.onLayoutChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _SegmentGroup(
+                label: 'Module',
+                icon: Icons.solar_power,
+                options: sizes,
+                active: sizeIndex,
+                onTap: onSizeChanged,
+              ),
+              _SegmentGroup(
+                label: 'Layout',
+                icon: Icons.grid_view,
+                options: layouts,
+                active: layoutIndex,
+                onTap: onLayoutChanged,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentGroup extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final List<String> options;
+  final int active;
+  final ValueChanged<int> onTap;
+
+  const _SegmentGroup({
+    required this.label,
+    required this.icon,
+    required this.options,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, color: const Color(0xFFFBBF24), size: 12),
+            const SizedBox(width: 4),
+            Text(label,
+                style: GoogleFonts.inter(
+                    color: Colors.white70,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1)),
+          ]),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: List.generate(options.length, (i) {
+              final selected = i == active;
+              return GestureDetector(
+                onTap: () => onTap(i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0xFFFBBF24)
+                        : Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: selected
+                            ? const Color(0xFFFBBF24)
+                            : Colors.white24),
+                  ),
+                  child: Text(
+                    options[i],
+                    style: GoogleFonts.inter(
+                        color: selected ? Colors.black87 : Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }

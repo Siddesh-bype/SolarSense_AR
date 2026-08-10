@@ -24,11 +24,11 @@ class ObstacleDetection {
 
   /// Approximate ground footprint (m²) reserved around this obstacle on the
   /// roof. Drives the usable-area subtraction in the analysis pipeline.
-  double get footprintM2 => ObstacleFootprint.kind(this.label);
+  double get footprintM2 => ObstacleFootprint.kind(label);
 
   /// Fraction of generation lost because this obstacle sits in/near the
   /// panel array (shading + setback). Bounded by [ObstacleSummary.maxLoss].
-  double get shadingLossPct => ObstacleFootprint.shading(this.label);
+  double get shadingLossPct => ObstacleFootprint.shading(label);
 
   Map<String, dynamic> toJson() => {
         'label': label,

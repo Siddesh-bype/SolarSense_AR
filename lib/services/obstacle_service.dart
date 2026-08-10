@@ -19,7 +19,6 @@
 //     area + combined shading loss) consumed by the analysis pipeline.
 
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';

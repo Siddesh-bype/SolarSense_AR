@@ -42,13 +42,9 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    // Weak reference so ARSceneManager can receive the permission callback
+    // Weak reference so ARSceneManager can receive the permission callback.
+    // Re-assigned on every platform-view creation (see factory below).
     private var arManagerRef: ARSceneManager? = null
-
-    private val arSceneManager: ARSceneManager by lazy {
-        Log.e(TAG, "lazy ARSceneManager init")
-        ARSceneManager(this, cameraPermLauncher).also { arManagerRef = it }
-    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -59,26 +55,42 @@ class MainActivity : FlutterFragmentActivity() {
                 VIEW_TYPE,
                 object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
                     override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
-                        Log.e(TAG, "factory.create() -- building ARSceneView")
-                        return arSceneManager
+                        Log.e(TAG, "factory.create() -- building ARSceneView #$viewId")
+                        // A FRESH manager per view call. Reusing a singleton here
+                        // leaves a closed session behind after dispose(), which
+                        // produced a permanent black screen when the AR screen was
+                        // reopened (sessionCreated stayed true, session == null).
+                        return ARSceneManager(this@MainActivity, cameraPermLauncher).also {
+                            arManagerRef = it
+                        }
                     }
                 },
             )
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CH)
             .setMethodCallHandler { call, result ->
+                val mgr = arManagerRef
                 try {
                     when (call.method) {
-                        "addPanel"        -> { arSceneManager.addPanel();    result.success(null) }
-                        "removePanel"     -> { arSceneManager.removePanel(); result.success(null) }
-                        "resetScan"       -> { arSceneManager.resetScan();   result.success(null) }
-                        "getScanSnapshot" -> result.success(arSceneManager.getScanSnapshot())
-                        "captureFrame"    -> arSceneManager.requestCapture(result)
+                        "addPanel"        -> { mgr?.addPanel();    result.success(null) }
+                        "removePanel"     -> { mgr?.removePanel(); result.success(null) }
+                        "resetScan"       -> { mgr?.resetScan();   result.success(null) }
+                        "getScanSnapshot" -> result.success(mgr?.getScanSnapshot() ?: emptyMap<String, Any>())
+                        "captureFrame"    ->
+                            if (mgr != null) mgr.requestCapture(result)
+                            else result.error("AR_ERROR", "AR view not ready", null)
                         "configurePanelPose" -> {
                             val tilt       = (call.argument<Double>("tiltDeg")     ?: 20.0).toFloat()
                             val azimuth    = (call.argument<Double>("azimuthDeg")  ?: 180.0).toFloat()
                             val elevation  = (call.argument<Double>("elevationM")  ?: 0.75).toFloat()
-                            arSceneManager.configurePanelPose(tilt, azimuth, elevation)
+                            mgr?.configurePanelPose(tilt, azimuth, elevation)
+                            result.success(null)
+                        }
+                        "configurePanelFlex" -> {
+                            val width   = (call.argument<Double>("widthM")  ?: 1.70).toFloat()
+                            val height  = (call.argument<Double>("heightM") ?: 1.14).toFloat()
+                            val layout  = call.argument<String>("layout")
+                            mgr?.configurePanelFlex(width, height, layout)
                             result.success(null)
                         }
                         "openAppSettings" -> {
@@ -102,10 +114,10 @@ class MainActivity : FlutterFragmentActivity() {
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(args: Any?, sink: EventChannel.EventSink) {
                     Log.e(TAG, "EventChannel: HUD stream opened")
-                    arSceneManager.eventSink = sink
+                    arManagerRef?.eventSink = sink
                 }
                 override fun onCancel(args: Any?) {
-                    arSceneManager.eventSink = null
+                    arManagerRef?.eventSink = null
                 }
             })
     }

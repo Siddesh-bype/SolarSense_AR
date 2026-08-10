@@ -22,7 +22,6 @@ class IrradianceResult {
 }
 
 const _kFallbackPsh = 4.5;
-const _kFallbackAnnual = 1642.5; // 4.5 × 365
 
 /// Documented system performance ratio (78%) used only for the offline
 /// regional fallback. The live PVGIS `E_y` value already incorporates system

@@ -57,7 +57,7 @@ class BrandRecommendation {
       case 'budget':
         return 'Budget pick — starts at ₹$ppwMin/W. ALMM-listed, qualifies for PM Surya Ghar subsidy.';
       case 'premium':
-        return 'Premium choice — ${eff}% efficiency, ${warranty}-year warranty. Rated ${rating.toStringAsFixed(1)}/10.';
+        return 'Premium choice — $eff% efficiency, $warranty-year warranty. Rated ${rating.toStringAsFixed(1)}/10.';
       default:
         return 'Balanced pick — ${rating.toStringAsFixed(1)}/10 rated, ALMM-listed, ₹$ppwMin–₹${brand['price_per_watt_max']}/W.';
     }
