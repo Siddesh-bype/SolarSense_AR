@@ -93,7 +93,7 @@ class _LoginRegisterScreenState extends State<LoginRegisterScreen> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'SolarMitra',
+                    'SolarSense',
                     style: theme.textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: c.onSurface,

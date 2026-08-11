@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solarmitra/models/obstacle_detection.dart';
-import 'package:solarmitra/models/obstacle_summary.dart';
-import 'package:solarmitra/services/obstacle_service.dart';
+import 'package:solarsense/models/obstacle_detection.dart';
+import 'package:solarsense/models/obstacle_summary.dart';
+import 'package:solarsense/services/obstacle_service.dart';
 
 void main() {
   group('ObstacleDetection', () {

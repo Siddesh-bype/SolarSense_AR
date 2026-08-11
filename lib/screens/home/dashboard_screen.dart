@@ -2,6 +2,10 @@ import '../scan/setup_scan_screen.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/user_session.dart';
+import '../../services/location_service.dart';
+import '../../services/pvgis_service.dart';
+import '../../services/subsidy_service.dart';
+import '../../services/link_opener.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,6 +25,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _howItWorksController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 3000));
     _playAnimationSequence();
+    _loadLiveData();
   }
 
   void _playAnimationSequence() async {
@@ -36,16 +41,110 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
-  final List<Map<String, dynamic>> _quickStats = [
-    {"label": "Avg. Monthly Savings", "value": "₹1,800", "tone": "primary"},
-    {"label": "Typical Payback", "value": "4.2 yrs", "tone": "ink"},
-    {"label": "CO₂ Saved", "value": "4.5 T/yr", "tone": "success"},
-  ];
+  // ── Live solar data (PVGIS + user session) ────────────────────────────────
+  bool _liveLoading = false;
+  bool _liveReady = false;
+  double? _liveSavedMonthly;
+  double? _livePaybackYears;
+  double? _liveCo2T;
+  String _liveCaption = 'Live numbers appear once you set up a scan';
+
+  final _pvgis = PvgisService();
+  final _subsidy = SubsidyService();
+  final _location = LocationService();
+
+  Future<void> _loadLiveData() async {
+    final s = UserSession.instance;
+    if (s.monthlyBillInr == null || s.stateKey == null) return;
+    setState(() => _liveLoading = true);
+    try {
+      await _subsidy.init();
+      double lat = s.lat ?? 0, lon = s.lon ?? 0;
+      if (lat == 0 && lon == 0) {
+        final loc = await _location.getCurrentLatLon();
+        lat = loc.lat;
+        lon = loc.lon;
+      }
+      final irr = await _pvgis.fetchIrradiance(lat, lon, s.stateKey);
+      final tariff = s.avgTariffInr ?? 7.0;
+      final monthlyKwh = s.monthlyBillInr! / tariff;
+      final systemKw = monthlyKwh / (irr.peakSunHours * 30);
+      final annualKwh = systemKw * irr.annualKwhPerKw;
+      final sub = _subsidy.calculate(
+        systemKw: systemKw,
+        stateName: s.stateKey!,
+        annualKwh: annualKwh,
+        avgTariff: tariff,
+      );
+      if (!mounted) return;
+      setState(() {
+        _liveSavedMonthly = s.monthlyBillInr! * 0.72;
+        _livePaybackYears = sub.paybackYears;
+        _liveCo2T = annualKwh * 0.82 / 1000;
+        _liveReady = true;
+        _liveCaption = irr.isFallback
+            ? 'Live • ${irr.peakSunHours} sun hrs/day (regional estimate)'
+            : 'Live • ${irr.peakSunHours} sun hrs/day from PVGIS';
+      });
+    } catch (_) {
+      // Keep the idle placeholders — the scan continues to work regardless.
+    } finally {
+      if (mounted) setState(() => _liveLoading = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _buildQuickStats(SolarPalette c) {
+    if (!_liveReady) {
+      return const [
+        {"label": "Avg. Monthly Savings", "value": "—", "tone": "primary"},
+        {"label": "Typical Payback", "value": "—", "tone": "ink"},
+        {"label": "CO₂ Saved", "value": "—", "tone": "success"},
+      ];
+    }
+    return [
+      {
+        "label": "Avg. Monthly Savings",
+        "value": "₹${_liveSavedMonthly!.toStringAsFixed(0)}",
+        "tone": "primary",
+      },
+      {
+        "label": "Typical Payback",
+        "value": "${_livePaybackYears!.toStringAsFixed(1)} yrs",
+        "tone": "ink",
+      },
+      {
+        "label": "CO₂ Saved",
+        "value": "${_liveCo2T!.toStringAsFixed(1)} T/yr",
+        "tone": "success",
+      },
+    ];
+  }
 
   final List<Map<String, dynamic>> _howItWorks = [
     {"icon": Icons.camera_alt_outlined, "label": "Scan Roof", "step": "01"},
     {"icon": Icons.solar_power_outlined, "label": "Place Panels", "step": "02"},
     {"icon": Icons.bar_chart_outlined, "label": "Get Report", "step": "03"},
+  ];
+
+  final List<Map<String, dynamic>> _schemeLinks = [
+    {
+      "title": "PM Surya Ghar Portal",
+      "subtitle": "Apply for the central subsidy (up to ₹78,000)",
+      "url": "https://pmsuryaghar.gov.in",
+      "icon": Icons.account_balance_outlined,
+    },
+    {
+      "title": "National Rooftop Portal",
+      "subtitle": "Find installers & track DISCOM approvals",
+      "url": "https://solarrooftop.gov.in",
+      "icon": Icons.roofing_outlined,
+    },
+    {
+      "title": "MNRE — New & Renewable Energy",
+      "subtitle": "ALMM-approved panel list & policy updates",
+      "url": "https://mnre.gov.in",
+      "icon": Icons.verified_outlined,
+    },
   ];
 
   TextTheme get _tt => Theme.of(context).textTheme;
@@ -69,6 +168,9 @@ class _DashboardScreenState extends State<DashboardScreen>
               const SizedBox(height: 28),
               _sectionTitle('How It Works'),
               _buildHowItWorksScroll(c),
+              const SizedBox(height: 28),
+              _sectionTitle('Subsidy & Scheme Links'),
+              _buildSchemeLinks(c),
               const SizedBox(height: 28),
               _sectionTitle('Recent Scans'),
               _buildEmptyState(c),
@@ -169,48 +271,112 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildStatsScroll(SolarPalette c) {
+    final stats = _buildQuickStats(c);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: List.generate(_quickStats.length, (i) {
-            return Expanded(
-              child: Container(
-                margin:
-                    EdgeInsets.only(right: i == _quickStats.length - 1 ? 0 : 8),
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: List.generate(stats.length, (i) {
+                return Expanded(
+                  child: Container(
+                    margin:
+                        EdgeInsets.only(right: i == stats.length - 1 ? 0 : 8),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          stats[i]["label"],
+                          style: _tt.labelSmall?.copyWith(
+                            color: c.onSurfaceMuted,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          stats[i]["value"],
+                          style: _tt.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            color: _toneColor(stats[i]["tone"], c),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: c.border),
+                  color: _liveReady ? AppColors.successSoft : c.surfaceMuted,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _quickStats[i]["label"],
-                      style: _tt.labelSmall?.copyWith(
-                        color: c.onSurfaceMuted,
-                        height: 1.3,
+                child: _liveLoading && !_liveReady
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _liveReady ? Icons.circle : Icons.circle_outlined,
+                            size: 8,
+                            color: _liveReady
+                                ? AppColors.success
+                                : c.onSurfaceMuted,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _liveReady ? 'LIVE' : 'IDLE',
+                            style: _tt.labelSmall?.copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _quickStats[i]["value"],
-                      style: _tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.4,
-                        color: _toneColor(_quickStats[i]["tone"], c),
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _liveCaption,
+                  style: _tt.bodySmall?.copyWith(color: c.onSurfaceMuted),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            );
-          }),
-        ),
+              if (!_liveReady)
+                TextButton(
+                  onPressed: () => Navigator.pushNamed(context, '/scan/setup'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  child: const Text('Set up'),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -247,7 +413,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF047857), Color(0xFF059669), Color(0xFF0B6B4F)],
+            colors: [Color(0xFFEA580C), Color(0xFFF97316), Color(0xFFC2410C)],
           ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
@@ -431,6 +597,55 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  Widget _buildSchemeLinks(SolarPalette c) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: List.generate(_schemeLinks.length, (i) {
+          final link = _schemeLinks[i];
+          return Container(
+            margin: EdgeInsets.only(bottom: i == _schemeLinks.length - 1 ? 0 : 10),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: c.border),
+            ),
+            child: ListTile(
+              onTap: () => openExternalLink(
+                link['url'] as String,
+                context: context,
+                label: link['title'] as String,
+              ),
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: c.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(link['icon'] as IconData,
+                    color: AppColors.primaryDeep, size: 20),
+              ),
+              title: Text(
+                link['title'] as String,
+                style: _tt.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: c.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                link['subtitle'] as String,
+                style: _tt.bodySmall?.copyWith(color: c.onSurfaceMuted),
+              ),
+              trailing: const Icon(Icons.open_in_new,
+                  size: 18, color: AppColors.primaryDeep),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildEmptyState(SolarPalette c) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -510,8 +725,8 @@ class _NotificationSheet extends StatelessWidget {
           'Today is sunny — ideal for running your high-power appliances to save on bills.',
           '2 min ago', true),
       const _Notif(Icons.account_balance_outlined, 'PM Surya Ghar',
-          'New subsidy window open: apply before 30 April to claim ₹78,000.',
-          '1 hr ago', true),
+          'Central subsidy up to ₹78,000 for 3kW+ systems is now open.',
+          '1 hr ago', true, url: 'https://pmsuryaghar.gov.in'),
       const _Notif(Icons.bar_chart_outlined, 'Report Ready',
           'Your last AR scan analysis has been processed. Tap to view.',
           '3 hrs ago', false),
@@ -582,6 +797,10 @@ class _NotificationSheet extends StatelessWidget {
                 itemBuilder: (_, i) {
                   final n = notifs[i];
                   return ListTile(
+                    onTap: n.url == null
+                        ? null
+                        : () => openExternalLink(n.url!,
+                            context: context, label: n.title),
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     leading: Container(
@@ -655,5 +874,7 @@ class _Notif {
   final String body;
   final String time;
   final bool isNew;
-  const _Notif(this.icon, this.title, this.body, this.time, this.isNew);
+  final String? url;
+  const _Notif(this.icon, this.title, this.body, this.time, this.isNew,
+      {this.url});
 }

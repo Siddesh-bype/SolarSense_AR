@@ -32,7 +32,7 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'SOLARMITRA',
+          'SOLARSENSE',
           style: tt.titleMedium?.copyWith(
             color: AppColors.primaryDeep,
             fontWeight: FontWeight.w800,
@@ -64,7 +64,7 @@ class ProfileScreen extends StatelessWidget {
                       gradient: const LinearGradient(
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
-                        colors: [Color(0xFF047857), Color(0xFF059669)],
+                        colors: [Color(0xFFEA580C), Color(0xFFF97316)],
                       ),
                     ),
                     child: Text(
@@ -148,7 +148,7 @@ class ProfileScreen extends StatelessWidget {
 
             Column(
               children: [
-                Text('SOLARMITRA PREMIUM',
+                Text('SOLARSENSE PREMIUM',
                     style: tt.labelSmall?.copyWith(
                       color: c.onSurfaceMuted,
                       fontWeight: FontWeight.w800,

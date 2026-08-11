@@ -1,15 +1,15 @@
-# SolarMitra ☀️📸
+# SolarSense ☀️📸
 
-**SolarMitra** is a cutting-edge Flutter mobile application designed to democratize and simplify rooftop solar assessments. By leveraging Augmented Reality (AR) spatial mapping and Machine Learning (ML) object detection, SolarMitra provides users with an instant, hyper-accurate, and 100% on-device solar feasibility report.
+**SolarSense** is a cutting-edge Flutter mobile application designed to democratize and simplify rooftop solar assessments. By leveraging Augmented Reality (AR) spatial mapping and Machine Learning (ML) object detection, SolarSense provides users with an instant, hyper-accurate, and 100% on-device solar feasibility report.
 
-Gone are the days of waiting for physical site visits. With SolarMitra, users can map their rooftop, identify obstacles, calculate solar potential, estimate subsidies, and generate a professional-grade PDF report—all from their smartphone in under 2 minutes.
+Gone are the days of waiting for physical site visits. With SolarSense, users can map their rooftop, identify obstacles, calculate solar potential, estimate subsidies, and generate a professional-grade PDF report—all from their smartphone in under 2 minutes.
 
 ---
 
 ## 🌟 Comprehensive Feature Set
 
 ### 1. AR Rooftop Spatial Mapping
-Instead of estimating roof size or looking up satellite imagery, SolarMitra uses the device's native AR capabilities (ARCore/ARKit) to map the roof in real-time. Users drop virtual anchor points at the corners of their roof to instantly calculate the total spatial area in square meters.
+Instead of estimating roof size or looking up satellite imagery, SolarSense uses the device's native AR capabilities (ARCore/ARKit) to map the roof in real-time. Users drop virtual anchor points at the corners of their roof to instantly calculate the total spatial area in square meters.
 
 ### 2. Edge-AI Obstacle Detection (YOLOv8)
 Roofs aren't always empty. Water tanks, HVAC units, and satellite dishes cause shading. The app runs a lightweight **YOLOv8 Nano (`yolov8n.tflite`)** object detection model directly on the camera feed using `tflite_flutter`. It automatically identifies these obstacles, computes their bounding boxes, and deducts the shaded area to calculate the *True Usable Area*.
@@ -18,7 +18,7 @@ Roofs aren't always empty. Water tanks, HVAC units, and satellite dishes cause s
 The app fetches precise localized solar irradiance data (Peak Sun Hours, expected Annual kWh/kW yield) by interfacing with the European Commission's **PVGIS API** based on the phone's exact GPS coordinates (`geolocator`). 
 
 ### 4. PM Surya Ghar Muft Bijli Yojana Engine
-Built specifically for the Indian market, SolarMitra incorporates the latest slab-based subsidy logic from the **PM Surya Ghar** scheme:
+Built specifically for the Indian market, SolarSense incorporates the latest slab-based subsidy logic from the **PM Surya Ghar** scheme:
 - Central Financial Assistance up to ₹78,000 for 3kW systems.
 - State-specific auxiliary subsidy multipliers (e.g., Gujarat, UP, Karnataka).
 - Net cost, ROI, and Payback period calculators based on regional tariffs.
@@ -31,13 +31,13 @@ Using the Dart `pdf` and `printing` packages, the app generates a highly detaile
 - Environmental Impact (Carbon offset equivalent).
 
 ### 6. Provider & ALMM Brand Matching
-SolarMitra features an integrated database of ALMM-approved Tier-1 solar manufacturers (e.g., Tata Power Solar, Adani Solar, Waaree, Vikram Solar). It recommends the best brands based on the user's calculated kW size and price sensitivity.
+SolarSense features an integrated database of ALMM-approved Tier-1 solar manufacturers (e.g., Tata Power Solar, Adani Solar, Waaree, Vikram Solar). It recommends the best brands based on the user's calculated kW size and price sensitivity.
 
 ---
 
 ## 🏗️ Technical Architecture & Pipeline
 
-SolarMitra relies on a localized **Orchestration Pipeline** (`ScanOrchestrator`) that manages asynchronous tasks to deliver results instantly:
+SolarSense relies on a localized **Orchestration Pipeline** (`ScanOrchestrator`) that manages asynchronous tasks to deliver results instantly:
 
 1. **Concurrent Fetching**:
    - As the AR scan completes, `PvgisService` fires an HTTP request to get irradiance data.
@@ -53,7 +53,7 @@ SolarMitra relies on a localized **Orchestration Pipeline** (`ScanOrchestrator`)
 
 ## 🧩 On-Device First & Backend Seams
 
-SolarMitra is **on-device first**: every computation (AR mapping, obstacle
+SolarSense is **on-device first**: every computation (AR mapping, obstacle
 detection, irradiance math, subsidy logic, PDF generation) runs locally. No
 account or server is required to get a full report. The only network call is an
 optional PVGIS irradiance lookup, which gracefully falls back to a regional
@@ -112,8 +112,8 @@ wire it. Swap the implementation in `main()` when ready.
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/Siddesh-bype/SolarMitra.git
-cd SolarMitra
+git clone https://github.com/Siddesh-bype/SolarSense_AR.git
+cd SolarSenseAR
 ```
 
 ### 2. Fetch Dependencies
@@ -146,10 +146,10 @@ The output APK will be located at `build/app/outputs/flutter-apk/app-release.apk
 
 ## 📝 Subsidies & Brand Data (Context)
 
-SolarMitra uses localized data curated for the Indian solar market of 2026.
+SolarSense uses localized data curated for the Indian solar market of 2026.
 *   **ALMM Compliance**: The app logic specifically prioritizes Approved List of Models and Manufacturers (ALMM) since only these panels qualify for the central subsidy.
 *   **Brands Integrated**: Tata Power Solar, Adani Solar, Waaree Energies, Vikram Solar, Luminous, Havells, and Loom Solar.
-*   **Subsidy Math**: For 2026, the PM Surya Ghar scheme offers ₹30,000 for 1kW, ₹60,000 for 2kW, and caps at ₹78,000 for 3kW or larger. SolarMitra automatically brackets user capacities to display the precise out-of-pocket costs.
+*   **Subsidy Math**: For 2026, the PM Surya Ghar scheme offers ₹30,000 for 1kW, ₹60,000 for 2kW, and caps at ₹78,000 for 3kW or larger. SolarSense automatically brackets user capacities to display the precise out-of-pocket costs.
 
 ---
 
@@ -160,4 +160,4 @@ Aside from the initial query to PVGIS for regional sun-hours (using your lat/lon
 
 ---
 
-*“SolarMitra: Built to empower faster, smarter, and independent solar energy transitions.”*
+*“SolarSense: Built to empower faster, smarter, and independent solar energy transitions.”*

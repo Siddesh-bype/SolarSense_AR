@@ -7,6 +7,8 @@ import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/solar/sun_path.dart';
+import '../../models/obstacle_detection.dart';
+import '../../services/obstacle_service.dart';
 import '../../services/user_session.dart';
 
 // ── Channel constants ────────────────────────────────────────────────────────
@@ -32,17 +34,51 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   bool   _planeFound = false;
   double _headingDeg = 0;   // compass heading streamed from native
 
+  // Selected panel (-1 = none). Height edits apply to it, or to all panels
+  // when nothing is selected.
+  int _selectedPanelId = -1;
+
+  // Mounting height in metres above the detected plane, 0 (floor) to 12 (roof).
+  double _heightM = SunPath.mountingElevationM;
+
+  // Obstacle detection — runs on DETECT and stays on this screen so the keep-out
+  // zones can be seen before the report is generated.
+  final _obstacleService = ObstacleService();
+  List<ObstacleDetection> _obstacles = const [];
+  bool _detecting = false;
+
   // ── Camera permission ───────────────────────────────────────────────────
   // null  → not yet known (assume granted-until-told-otherwise)
   // 'granted' / 'denied' come from the native side via EventChannel.
   String? _cameraPermission;
   bool    _cameraPermissionPermanent = false;
 
+  /// null = still checking, true/false = ARCore verdict from the native side.
+  bool? _arSupported;
+
   @override
   void initState() {
     super.initState();
     _kEventCh.receiveBroadcastStream().listen(_onArEvent, onError: (_) {});
+    _checkArSupport();
     _pushOptimalPose();
+    // Warm the detector so the first DETECT press isn't paying model-load cost.
+    _obstacleService.init();
+  }
+
+  /// Older / non-ARCore phones still get a usable scan: we ask the native side
+  /// whether ARCore can run at all and, if not, show manual roof-area entry
+  /// instead of an AR view that would never track.
+  Future<void> _checkArSupport() async {
+    bool supported = false;
+    try {
+      final Map? r =
+          await _kMethodCh.invokeMethod('checkArAvailability') as Map?;
+      supported = (r?['supported'] as bool?) ?? false;
+    } catch (_) {
+      supported = false; // channel missing (e.g. iOS/desktop) → manual path
+    }
+    if (mounted) setState(() => _arSupported = supported);
   }
 
   /// Pushes the sun-path-optimal tilt + mounting elevation to the native
@@ -75,6 +111,7 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
         _areaSqm    = (event['areaSqm']    as double?) ?? _areaSqm;
         _planeFound = (event['planeFound'] as bool?)  ?? _planeFound;
         _headingDeg = (event['headingDeg'] as double?) ?? _headingDeg;
+        _selectedPanelId = (event['selectedId'] as int?) ?? _selectedPanelId;
 
         // Permission events are emitted on grant/deny only — absent keys
         // mean this is a normal HUD frame.
@@ -102,6 +139,22 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   Future<void> _addPanel()    => _kMethodCh.invokeMethod('addPanel');
   Future<void> _removePanel() => _kMethodCh.invokeMethod('removePanel');
   Future<void> _resetScan()   => _kMethodCh.invokeMethod('resetScan');
+
+  /// Packs the plane with mixed module sizes — large modules first, then the
+  /// smaller SKUs into the leftover strips.
+  Future<void> _autoFillMixed() => _kMethodCh.invokeMethod('autoFillMixed');
+
+  /// Applies the mounting height. Targets the selected panel if there is one,
+  /// otherwise the whole array.
+  Future<void> _applyHeight(double metres) {
+    if (_selectedPanelId > 0) {
+      return _kMethodCh.invokeMethod(
+        'setPanelHeight',
+        {'id': _selectedPanelId, 'elevationM': metres},
+      );
+    }
+    return _kMethodCh.invokeMethod('setAllPanelHeight', {'elevationM': metres});
+  }
 
   /// Switches the live 3D module size + layout on the native side.
   Future<void> _setPanelFlex({double widthM = 1.70, double heightM = 1.14, String? layout}) {
@@ -133,9 +186,9 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
 
   // ── Panel style (size + layout) ──────────────────────────────────────────
   static const _panelSizes = [
-    (name: 'Standard 540W', width: 1.70, height: 1.14),
-    (name: 'Compact 460W',  width: 1.60, height: 1.00),
-    (name: 'Large 700W',    width: 2.00, height: 1.30),
+    (name: 'Standard 540W', width: 1.70, height: 1.14, watts: 540),
+    (name: 'Compact 460W',  width: 1.60, height: 1.00, watts: 460),
+    (name: 'Large 700W',    width: 2.00, height: 1.30, watts: 700),
   ];
   static const _layouts = [
     (name: 'Auto',        native: null),
@@ -154,36 +207,43 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
     );
   }
 
-  /// Captures a real camera frame and forwards it to the analysis pipeline so
-  /// on-device obstacle detection runs. Falls back to demo-mode detection if
-  /// the capture fails (the service handles a missing frame gracefully).
+  /// Captures a real camera frame, runs on-device obstacle detection, and pushes
+  /// the boxes to the native side so panels re-pack around the keep-out zones.
+  /// Stays on this screen — the user sees the obstacles land in the live scene
+  /// instead of the result appearing only in the report.
   Future<void> _scanObstacles() async {
+    if (_detecting) return;
+    setState(() => _detecting = true);
     try {
-      final Map? frame =
-          await _kMethodCh.invokeMethod('captureFrame') as Map?;
+      final Map? frame = await _kMethodCh.invokeMethod('captureFrame') as Map?;
       final bytes = frame?['bytes'] as Uint8List?;
-      final Map snapshot = await _kMethodCh.invokeMethod('getScanSnapshot') ?? {};
+      final found = await _obstacleService.detectObstacles(bytes);
       if (!mounted) return;
-      Navigator.pushReplacementNamed(
-        context,
-        '/scan/loading',
-        arguments: {
-          'panelCount': snapshot['panelCount'] ?? _panelCount,
-          'systemKw'  : snapshot['systemKw']   ?? _systemKw,
-          'areaSqm'   : snapshot['areaSqm']    ?? _areaSqm,
-          'headingDeg': snapshot['headingDeg'] ?? _headingDeg,
-          'cameraFrame': bytes,
-        },
-      );
-    } catch (_) {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/scan/loading', arguments: {
-          'panelCount': _panelCount,
-          'systemKw': _systemKw,
-          'areaSqm': _areaSqm,
-          'headingDeg': _headingDeg,
+      setState(() => _obstacles = found);
+      if (found.isNotEmpty) {
+        await _kMethodCh.invokeMethod('applyObstacles', {
+          'boxes': [
+            for (final o in found)
+              {'x': o.x, 'y': o.y, 'w': o.w, 'h': o.h, 'label': o.label},
+          ],
         });
       }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(found.isEmpty
+                ? 'No rooftop obstacles found — full area usable'
+                : '${found.length} obstacle(s) found · panels re-packed around them'),
+            backgroundColor: const Color(0xFF1F2937),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (_) {
+      // Detection is an enhancement, not a gate — a failure leaves the existing
+      // layout untouched.
+    } finally {
+      if (mounted) setState(() => _detecting = false);
     }
   }
 
@@ -193,6 +253,25 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBot = MediaQuery.of(context).padding.bottom;
+
+    // Don't create the AR platform view on a phone that can't run ARCore —
+    // it would show a permanent black surface. Manual entry instead.
+    if (_arSupported == false) {
+      return _ManualAreaScreen(
+        onSubmit: (areaSqm) {
+          final size = _panelSizes[_panelSizeIndex];
+          final perPanel = size.width * size.height;
+          final count = (areaSqm * 0.75 / perPanel).floor().clamp(0, 400);
+          Navigator.pushReplacementNamed(context, '/scan/loading', arguments: {
+            'panelCount': count,
+            'systemKw': count * size.watts / 1000.0,
+            'areaSqm': areaSqm,
+            'headingDeg': 0.0,
+          });
+        },
+        onBack: () => Navigator.pop(context),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -296,14 +375,26 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
               child: _Sidebar(
                 onAdd:     _addPanel,
                 onRemove:  _removePanel,
-                onMaxFill: () async {
-                  // Fill up to max by calling addPanel repeatedly
-                  for (int i = _panelCount; i < _maxPanels; i++) {
-                    await _addPanel();
-                  }
-                },
+                // Mixed-size packing happens natively in one pass: large modules
+                // first, smaller SKUs into the leftover strips.
+                onMaxFill: _autoFillMixed,
                 panelCount: _panelCount,
                 maxPanels: _maxPanels,
+              ),
+            ),
+
+          // ── Layer 5b: Mounting height (0 m floor → 12 m roof) ─────────────
+          if (_planeFound)
+            Positioned(
+              left: 14,
+              bottom: safeBot + 140,
+              child: _HeightBar(
+                metres: _heightM,
+                selectedId: _selectedPanelId,
+                onChanged: (v) {
+                  setState(() => _heightM = v);
+                  _applyHeight(v);
+                },
               ),
             ),
 
@@ -313,6 +404,8 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
             child: _ShutterBar(
               safeBot: safeBot,
               planeFound: _planeFound,
+              detecting: _detecting,
+              obstacleCount: _obstacles.length,
               onCapture: _capture,
               onDetect: _scanObstacles,
               onReset: _resetScan,
@@ -388,7 +481,7 @@ class _TopBar extends StatelessWidget {
         children: [
           _GlassBtn(icon: Icons.arrow_back, onTap: onBack),
           Column(children: [
-            Text('SolarMitra',
+            Text('SolarSense',
                 style: GoogleFonts.manrope(
                     color: Colors.white,
                     fontSize: 17,
@@ -559,11 +652,15 @@ class _Sidebar extends StatelessWidget {
 class _ShutterBar extends StatelessWidget {
   final double safeBot;
   final bool planeFound;
+  final bool detecting;
+  final int obstacleCount;
   final VoidCallback onCapture, onDetect, onReset;
 
   const _ShutterBar({
     required this.safeBot,
     required this.planeFound,
+    required this.detecting,
+    required this.obstacleCount,
     required this.onCapture,
     required this.onDetect,
     required this.onReset,
@@ -585,9 +682,15 @@ class _ShutterBar extends StatelessWidget {
         children: [
           _BarAction(icon: Icons.restart_alt, label: 'RESET', onTap: onReset),
           _BarAction(
-            icon: Icons.visibility_outlined,
-            label: 'DETECT',
-            onTap: planeFound ? () => onDetect() : null,
+            icon: obstacleCount > 0
+                ? Icons.visibility
+                : Icons.visibility_outlined,
+            label: detecting
+                ? '...'
+                : (obstacleCount > 0 ? '$obstacleCount FOUND' : 'DETECT'),
+            busy: detecting,
+            tint: obstacleCount > 0 ? const Color(0xFFFBBF24) : null,
+            onTap: (planeFound && !detecting) ? () => onDetect() : null,
           ),
           // Shutter
           GestureDetector(
@@ -635,12 +738,23 @@ class _ShutterBar extends StatelessWidget {
 class _BarAction extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool busy;
+  final Color? tint;
   final VoidCallback? onTap;
 
-  const _BarAction({required this.icon, required this.label, this.onTap});
+  const _BarAction({
+    required this.icon,
+    required this.label,
+    this.busy = false,
+    this.tint,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final fg = onTap == null && !busy
+        ? Colors.white38
+        : (tint ?? Colors.white);
     return GestureDetector(
       onTap: onTap,
       child: Column(children: [
@@ -651,14 +765,24 @@ class _BarAction extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.12),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Center(child: Icon(icon, color: Colors.white, size: 22)),
+              child: Center(
+                child: busy
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Color(0xFFFBBF24)),
+                        ),
+                      )
+                    : Icon(icon, color: fg, size: 22),
+              ),
             ),
           ),
         ),
         const SizedBox(height: 5),
         Text(label,
             style: GoogleFonts.inter(
-                color: Colors.white60, fontSize: 9,
+                color: tint ?? Colors.white60, fontSize: 9,
                 fontWeight: FontWeight.bold, letterSpacing: 1.2)),
       ]),
     );
@@ -682,7 +806,7 @@ class _PermissionDeniedOverlay extends StatelessWidget {
         ? 'Camera access is turned off'
         : 'Camera access required';
     final body = permanent
-        ? 'You previously blocked the camera for SolarMitra. '
+        ? 'You previously blocked the camera for SolarSense. '
           'Enable Camera under App permissions to run the AR scan.'
         : 'The AR scan uses your phone camera to measure the rooftop. '
           'Grant camera access to continue.';
@@ -847,7 +971,7 @@ class _SegmentGroup extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(icon, color: const Color(0xFFFBBF24), size: 12),
+            Icon(icon, color: const Color(0xFFF97316), size: 12),
             const SizedBox(width: 4),
             Text(label,
                 style: GoogleFonts.inter(
@@ -868,12 +992,12 @@ class _SegmentGroup extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(
                     color: selected
-                        ? const Color(0xFFFBBF24)
+                        ? const Color(0xFFF97316)
                         : Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                         color: selected
-                            ? const Color(0xFFFBBF24)
+                            ? const Color(0xFFF97316)
                             : Colors.white24),
                   ),
                   child: Text(
@@ -888,6 +1012,235 @@ class _SegmentGroup extends StatelessWidget {
             }),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Vertical mounting-height control: 0 m sits the array flat on the detected
+/// surface (floor mount), 12 m raises it to roof level. Applies to the selected
+/// panel when one is tapped, otherwise to the whole array.
+class _HeightBar extends StatelessWidget {
+  final double metres;
+  final int selectedId;
+  final ValueChanged<double> onChanged;
+
+  const _HeightBar({
+    required this.metres,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  static const _maxM = 12.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final scoped = selectedId > 0;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: 62,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: scoped
+                  ? const Color(0xFFF97316).withValues(alpha: 0.6)
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.height,
+                  color: scoped ? const Color(0xFFF97316) : const Color(0xFFFBBF24),
+                  size: 14),
+              const SizedBox(height: 2),
+              Text(
+                scoped ? 'ONE' : 'ALL',
+                style: GoogleFonts.inter(
+                    color: Colors.white54,
+                    fontSize: 7,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8),
+              ),
+              const SizedBox(height: 6),
+              // Rotated so the slider reads bottom-up: ground at the bottom.
+              SizedBox(
+                height: 150,
+                child: RotatedBox(
+                  quarterTurns: 3,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      activeTrackColor: const Color(0xFFFBBF24),
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: Colors.white,
+                      overlayShape: SliderComponentShape.noOverlay,
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 8),
+                    ),
+                    child: Slider(
+                      value: metres.clamp(0.0, _maxM),
+                      min: 0,
+                      max: _maxM,
+                      divisions: 48, // 0.25 m steps
+                      onChanged: onChanged,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${metres.toStringAsFixed(2)} m',
+                style: GoogleFonts.manrope(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold),
+              ),
+              Text(
+                metres < 0.5 ? 'FLOOR' : (metres >= 8 ? 'ROOF' : 'RAISED'),
+                style: GoogleFonts.inter(
+                    color: Colors.white38,
+                    fontSize: 7,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown when ARCore isn't available (older phones, no Google Play Services for
+/// AR): manual roof-area entry that still produces a full financial report, so
+/// "old phone" doesn't mean "no scan".
+class _ManualAreaScreen extends StatefulWidget {
+  final void Function(double areaSqm) onSubmit;
+  final VoidCallback onBack;
+
+  const _ManualAreaScreen({required this.onSubmit, required this.onBack});
+
+  @override
+  State<_ManualAreaScreen> createState() => _ManualAreaScreenState();
+}
+
+class _ManualAreaScreenState extends State<_ManualAreaScreen> {
+  final _area = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _area.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final v = double.tryParse(_area.text.trim().replaceAll(',', '.'));
+    if (v == null || v <= 0 || v > 100000) {
+      setState(() => _error = 'Enter a roof area between 1 and 100000 m²');
+      return;
+    }
+    setState(() => _error = null);
+    widget.onSubmit(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B1B16),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                GestureDetector(
+                  onTap: widget.onBack,
+                  child: const Icon(Icons.arrow_back, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Text('SOLARMITRA',
+                    style: GoogleFonts.manrope(
+                        color: const Color(0xFFFBBF24),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        letterSpacing: 1.2)),
+              ]),
+              const SizedBox(height: 48),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.straighten,
+                      color: Color(0xFFFBBF24), size: 44),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text("AR isn't available on this phone",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.manrope(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Text(
+                "This device doesn't support Google ARCore, so the camera scan "
+                "can't run. You still get a full solar report — just enter your "
+                "roof area.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    color: Colors.white70, fontSize: 14, height: 1.5),
+              ),
+              const SizedBox(height: 28),
+              TextField(
+                controller: _area,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: Colors.white),
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  labelText: 'Roof area',
+                  labelStyle: const TextStyle(color: Colors.white54),
+                  suffixText: 'm²',
+                  suffixStyle: const TextStyle(color: Colors.white38),
+                  errorText: _error,
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.06),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Colors.white24),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFFBBF24)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: _submit,
+                icon: const Icon(Icons.bolt),
+                label: const Text('Generate solar report'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF97316),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

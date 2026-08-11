@@ -31,9 +31,9 @@ class ProviderSchemeScreen extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFF047857),
-                    Color(0xFF059669),
-                    Color(0xFF0B6B4F),
+                    Color(0xFFEA580C),
+                    Color(0xFFF97316),
+                    Color(0xFFC2410C),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(20),

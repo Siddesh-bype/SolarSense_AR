@@ -4,11 +4,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- ARCore requires camera -->
-    <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
+    <!-- ARCore: optional at install time so non-ARCore phones can install the
+         app and use the manual roof-area path; the AR screen gates at runtime
+         via ArCoreApk.checkAvailability. -->
+    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <application
-        android:label="solarmitra"
+        android:label="SolarSense"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:networkSecurityConfig="@xml/network_security_config">
@@ -31,9 +33,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- ARCore: required — tools:replace overrides arsceneview's 'optional' declaration -->
+        <!-- ARCore optional: Play installs Google Play Services for AR only on
+             supported devices, and the app degrades to manual entry elsewhere. -->
         <meta-data android:name="com.google.ar.core"
-                   android:value="required"
+                   android:value="optional"
                    tools:replace="android:value" />
         <!-- Flutter embedding version -->
         <meta-data

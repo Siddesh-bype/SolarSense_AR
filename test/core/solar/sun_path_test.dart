@@ -4,7 +4,7 @@
 // runs with `flutter test` out of the box using only flutter_test.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solarmitra/core/solar/sun_path.dart';
+import 'package:solarsense/core/solar/sun_path.dart';
 
 void main() {
   group('SunPath.optimalTiltDeg', () {

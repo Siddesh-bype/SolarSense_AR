@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
                   colors: [
                     AppColors.primaryDeep,
                     AppColors.primary,
-                    const Color(0xFF0B6B4F),
+                    const Color(0xFFEA580C),
                   ],
                 ),
               ),
@@ -108,7 +108,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                               const SizedBox(height: 28),
                               const Text(
-                                'SolarMitra',
+                                'SolarSense',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 30,

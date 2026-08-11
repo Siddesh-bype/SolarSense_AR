@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../models/enriched_scan_result.dart';
 import '../../services/report_service.dart';
 import '../../services/user_session.dart';
+import '../../services/link_opener.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class FinancialReportScreen extends StatefulWidget {
@@ -88,10 +89,10 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       await _download(data);
       final p = _lastPdfPath;
       if (p == null) return;
-      await Share.shareXFiles([XFile(p)], text: 'My SolarMitra report');
+      await Share.shareXFiles([XFile(p)], text: 'My SolarSense report');
       return;
     }
-    await Share.shareXFiles([XFile(path)], text: 'My SolarMitra report');
+    await Share.shareXFiles([XFile(path)], text: 'My SolarSense report');
   }
 
   String _friendly(Object e) {
@@ -186,7 +187,7 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF047857), Color(0xFF059669), Color(0xFF0B6B4F)],
+          colors: [Color(0xFFEA580C), Color(0xFFF97316), Color(0xFFC2410C)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -558,7 +559,8 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
           ),
           const SizedBox(height: 16),
           OutlinedButton(
-            onPressed: () {},
+            onPressed: () => openExternalLink('https://pmsuryaghar.gov.in',
+                context: context, label: 'PM Surya Ghar portal'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primaryDeep,
               side: const BorderSide(color: AppColors.primaryDeep),

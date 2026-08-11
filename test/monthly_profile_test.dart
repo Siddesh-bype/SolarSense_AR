@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solarmitra/core/solar/monthly_profile.dart';
+import 'package:solarsense/core/solar/monthly_profile.dart';
 
 void main() {
   test('returns exactly 12 monthly multipliers', () {

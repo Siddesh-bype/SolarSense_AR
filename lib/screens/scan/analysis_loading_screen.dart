@@ -179,7 +179,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
                         children: [
                           const Icon(Icons.solar_power, color: AppColors.primaryDeep, size: 28),
                           const SizedBox(width: 8),
-                          Text('SOLARMITRA',
+                          Text('SOLARSENSE',
                               style: GoogleFonts.manrope(
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.gold,
@@ -333,7 +333,7 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFF047857), AppColors.primaryDeep, Color(0xFFFBBF24)],
+                                  colors: [Color(0xFFFB923C), AppColors.primary, AppColors.primaryDeep],
                                 ),
                                 borderRadius: BorderRadius.circular(3),
                                 boxShadow: [
