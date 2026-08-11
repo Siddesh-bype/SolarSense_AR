@@ -1,79 +1,136 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- SolarSense product flow (rendered on the README via raw.githubusercontent.com). -->
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="120" viewBox="0 0 760 120" role="img" aria-label="SolarSense product workflow">
+<!-- SolarSense product flow — animated (rendered on the README via raw.githubusercontent.com). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 220" role="img" aria-labelledby="title desc">
+  <title id="title">SolarSense on-device solar workflow</title>
+  <desc id="desc">Animated flow from camera motion to ARCore plane and depth, YOLOv8n obstacle AI, usable area x PVGIS irradiance x PM Surya Ghar subsidies, and a 16-page PDF report.</desc>
   <defs>
-    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25"/>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#F0F9FF" />
+      <stop offset="1" stop-color="#ECFDF5" />
+    </linearGradient>
+    <linearGradient id="bgGlow" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#BAE6FD" stop-opacity="0" />
+      <stop offset="1" stop-color="#A7F3D0" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="shimmer" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#164E63" flood-opacity=".12" />
     </filter>
-    <style>
-      .stage { fill:#fff; stroke:#0F172A; stroke-width:1.5; filter:url(#soft); }
-      .bar  { fill:#0891B2; }
-      .tip  { fill:#059669; }
-      .ar   { fill:#0891B2; }
-      .ai   { fill:#059669; }
-      .db   { fill:#0891B2; }
-      .rep  { fill:#059669; }
-      .lbl  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; fill:#0F172A; text-anchor:middle; }
-      .sub  { font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:11px; fill:#475569; text-anchor:middle; }
-      .arrow { stroke:#64748B; stroke-width:2; marker-end:url(#arrowhead); }
-      .plus { font-family:ui-monospace,monospace; font-size:16px; fill:#0F172A; text-anchor:middle; }
-    </style>
-    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L10,4 L0,8 Z" fill="#64748B"/>
-    </marker>
+    <filter id="glow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
   </defs>
 
-  <!-- Stage 1: AR core -->
-  <rect x="12" y="28" width="116" height="56" rx="12" class="stage ar"/>
-  <rect x="12" y="28" width="116" height="20" rx="12" class="bar"/>
-  <text x="70" y="44" class="lbl">ARCore plane + depth</text>
-  <text x="70" y="64" class="sub">roof mapped in 3D</text>
-  <text x="70" y="80" class="sub">spatial area computed</text>
+  <rect width="1000" height="220" rx="24" fill="url(#bg)" />
 
-  <!-- → -->
-  <line x1="128" y1="56" x2="172" y2="56" class="arrow"/>
-  <text x="150" y="52" class="plus">▶</text>
+  <rect width="1000" height="220" rx="24" fill="url(#bgGlow)">
+    <animate attributeName="opacity" values="0;1;0" dur="6s" repeatCount="indefinite" />
+  </rect>
 
-  <!-- Stage 2: YOLO -->
-  <rect x="172" y="28" width="132" height="56" rx="12" class="stage ai"/>
-  <rect x="172" y="28" width="132" height="20" rx="12" class="bar"/>
-  <text x="238" y="44" class="lbl">YOLOv8n obstacle AI</text>
-  <text x="238" y="64" class="sub">AC units, tanks, dishes</text>
-  <text x="238" y="80" class="sub">on-device TFLite inference</text>
+  <g>
+    <rect width="1000" height="220" fill="url(#shimmer)" opacity="0">
+      <animate attributeName="opacity" values="0;1;0" dur="5.5s" begin="0.8s" repeatCount="indefinite" />
+      <animateTransform attributeName="transform" type="translate" from="-1000 0" to="1000 0" dur="5.5s" repeatCount="indefinite" />
+    </rect>
+  </g>
 
-  <!-- → -->
-  <line x1="304" y1="56" x2="348" y2="56" class="arrow"/>
-  <text x="326" y="52" class="plus">▶</text>
+  <g stroke="#67E8F9" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M180 110H200M360 110H380M540 110H560M720 110H740" stroke-dasharray="10 12">
+      <animate attributeName="stroke-dashoffset" from="0" to="-44" dur="1.1s" repeatCount="indefinite" />
+    </path>
+    <path d="M180 110H200M360 110H380M540 110H560M720 110H740" stroke="#22D3EE" opacity="0.35" stroke-width="1.5" stroke-dasharray="2 6">
+      <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="1.1s" repeatCount="indefinite" />
+    </path>
+  </g>
 
-  <!-- Stage 3: usable area -->
-  <rect x="348" y="28" width="120" height="56" rx="12" class="stage db"/>
-  <rect x="348" y="28" width="120" height="20" rx="12" class="bar"/>
-  <text x="408" y="44" class="lbl">Usable-area engine</text>
-  <text x="408" y="64" class="sub">shaded footprint deducted</text>
-  <text x="408" y="80" class="sub">true usable area</text>
+  <g filter="url(#glow)">
+    <circle r="6" fill="#0891B2">
+      <animateMotion dur="3.4s" repeatCount="indefinite" path="M180 110H200M360 110H380M540 110H560M720 110H740" />
+    </circle>
+  </g>
+  <circle r="14" fill="#0891B2" opacity="0.25">
+    <animateMotion dur="3.4s" repeatCount="indefinite" path="M180 110H200M360 110H380M540 110H560M720 110H740" />
+    <animate attributeName="r" values="10;18;10" dur="1.2s" repeatCount="indefinite" />
+  </circle>
 
-  <!-- → -->
-  <line x1="468" y1="56" x2="512" y2="56" class="arrow"/>
-  <text x="490" y="52" class="plus">▶</text>
+  <g filter="url(#shadow)">
+    <rect x="20" y="55" width="160" height="110" rx="18" fill="#fff" stroke="#A5F3FC" stroke-width="2">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="0.2s" fill="freeze" />
+    </rect>
+    <rect x="200" y="55" width="160" height="110" rx="18" fill="#fff" stroke="#A5F3FC" stroke-width="2">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="0.5s" fill="freeze" />
+    </rect>
+    <rect x="380" y="55" width="160" height="110" rx="18" fill="#fff" stroke="#A5F3FC" stroke-width="2">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="0.8s" fill="freeze" />
+    </rect>
+    <rect x="560" y="55" width="160" height="110" rx="18" fill="#fff" stroke="#A5F3FC" stroke-width="2">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="1.1s" fill="freeze" />
+    </rect>
+    <rect x="740" y="55" width="160" height="110" rx="18" fill="#fff" stroke="#10B981" stroke-width="2.5">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="1.4s" fill="freeze" />
+      <animate attributeName="stroke-opacity" values="1;0.4;1" dur="2.2s" begin="1.4s" repeatCount="indefinite" />
+    </rect>
+  </g>
+  <rect x="740" y="55" width="160" height="110" rx="18" fill="#10B981" opacity="0.06">
+    <animate attributeName="opacity" values="0.06;0.2;0.06" dur="2.2s" begin="1.4s" repeatCount="indefinite" />
+  </rect>
 
-  <!-- Stage 4: subsidy + PVGIS -->
-  <rect x="512" y="28" width="128" height="56" rx="12" class="stage tip"/>
-  <rect x="512" y="28" width="128" height="20" rx="12" class="bar"/>
-  <text x="576" y="44" class="lbl">PVGIS × PM Surya Ghar</text>
-  <text x="576" y="64" class="sub">irradiance + subsidies</text>
-  <text x="576" y="80" class="sub">system size, ROI, payback</text>
+  <g fill="#164E63" font-family="Arial, sans-serif" text-anchor="middle">
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="0.4s" fill="freeze" />
+      <text x="100" y="92" font-size="13" font-weight="700">01</text>
+      <text x="100" y="119" font-size="16" font-weight="700">Camera + motion</text>
+      <text x="100" y="142" font-size="12" fill="#475569">live feed</text>
+    </g>
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="0.7s" fill="freeze" />
+      <text x="280" y="92" font-size="13" font-weight="700">02</text>
+      <text x="280" y="119" font-size="16" font-weight="700">ARCore plane + depth</text>
+      <text x="280" y="142" font-size="12" fill="#475569">roof mapped in 3D</text>
+    </g>
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="1s" fill="freeze" />
+      <text x="460" y="92" font-size="13" font-weight="700">03</text>
+      <text x="460" y="119" font-size="16" font-weight="700">YOLOv8n obstacle AI</text>
+      <text x="460" y="142" font-size="12" fill="#475569">AC units, water tanks</text>
+    </g>
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="1.3s" fill="freeze" />
+      <text x="640" y="92" font-size="13" font-weight="700">04</text>
+      <text x="640" y="119" font-size="16" font-weight="700">PVGIS × Surya Ghar</text>
+      <text x="640" y="142" font-size="12" fill="#475569">irradiance + subsidies</text>
+    </g>
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1" dur="0.8s" begin="1.6s" fill="freeze" />
+      <text x="820" y="92" font-size="13" font-weight="700" fill="#047857">05</text>
+      <text x="820" y="119" font-size="16" font-weight="700">PDF report</text>
+      <text x="820" y="142" font-size="12" fill="#475569">16 pages, on-device</text>
+    </g>
+  </g>
 
-  <!-- → -->
-  <line x1="640" y1="56" x2="684" y2="56" class="arrow"/>
-  <text x="662" y="52" class="plus">▶</text>
-
-  <!-- Stage 5: PDF report -->
-  <rect x="684" y="28" width="64" height="56" rx="12" class="stage rep"/>
-  <rect x="684" y="28" width="64" height="20" rx="12" class="bar"/>
-  <text x="716" y="44" class="lbl">PDF report</text>
-  <text x="716" y="64" class="sub">16 pages</text>
-  <text x="716" y="80" class="sub">on-device</text>
-
-  <!-- Caption -->
-  <text x="380" y="18" class="sub">Camera feed + motion  →  AR mapping  →  AI obstacles  →  usable area  ×  irradiance  →  export</text>
+  <g>
+    <circle cx="100" cy="186" r="4" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.15;1;0.15" dur="3.4s" begin="0s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="280" cy="186" r="4" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.15;1;0.15" dur="3.4s" begin="0.85s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="460" cy="186" r="4" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.15;1;0.15" dur="3.4s" begin="1.7s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="640" cy="186" r="4" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.15;1;0.15" dur="3.4s" begin="2.55s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="820" cy="186" r="4" fill="#10B981">
+      <animate attributeName="opacity" values="0.15;1;0.15" dur="3.4s" begin="3.4s" repeatCount="indefinite" />
+    </circle>
+  </g>
 </svg>
