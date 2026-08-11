@@ -59,7 +59,7 @@ report — **100 % on-device, no account or server needed.**
 ## Product Flow
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Siddesh-bype/SolarSense_AR/main/assets/logo.png" alt="SolarSense product workflow" width="56" />
+  <img src="https://raw.githubusercontent.com/Siddesh-bype/SolarSense_AR/main/docs/solarsense-flow.svg" alt="SolarSense product workflow: camera + motion → ARCore plane + depth → YOLOv8n obstacle AI → usable-area engine → PVGIS × PM Surya Ghar subsidies → 16-page PDF report" width="760" />
 </p>
 
 ```text

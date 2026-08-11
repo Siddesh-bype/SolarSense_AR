@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SolarSense product flow (rendered on the README via raw.githubusercontent.com). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="120" viewBox="0 0 760 120" role="img" aria-label="SolarSense product workflow">
+  <defs>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25"/>
+    </filter>
+    <style>
+      .stage { fill:#fff; stroke:#0F172A; stroke-width:1.5; filter:url(#soft); }
+      .bar  { fill:#0891B2; }
+      .tip  { fill:#059669; }
+      .ar   { fill:#0891B2; }
+      .ai   { fill:#059669; }
+      .db   { fill:#0891B2; }
+      .rep  { fill:#059669; }
+      .lbl  { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; fill:#0F172A; text-anchor:middle; }
+      .sub  { font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; font-size:11px; fill:#475569; text-anchor:middle; }
+      .arrow { stroke:#64748B; stroke-width:2; marker-end:url(#arrowhead); }
+      .plus { font-family:ui-monospace,monospace; font-size:16px; fill:#0F172A; text-anchor:middle; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+  </defs>
+
+  <!-- Stage 1: AR core -->
+  <rect x="12" y="28" width="116" height="56" rx="12" class="stage ar"/>
+  <rect x="12" y="28" width="116" height="20" rx="12" class="bar"/>
+  <text x="70" y="44" class="lbl">ARCore plane + depth</text>
+  <text x="70" y="64" class="sub">roof mapped in 3D</text>
+  <text x="70" y="80" class="sub">spatial area computed</text>
+
+  <!-- → -->
+  <line x1="128" y1="56" x2="172" y2="56" class="arrow"/>
+  <text x="150" y="52" class="plus">▶</text>
+
+  <!-- Stage 2: YOLO -->
+  <rect x="172" y="28" width="132" height="56" rx="12" class="stage ai"/>
+  <rect x="172" y="28" width="132" height="20" rx="12" class="bar"/>
+  <text x="238" y="44" class="lbl">YOLOv8n obstacle AI</text>
+  <text x="238" y="64" class="sub">AC units, tanks, dishes</text>
+  <text x="238" y="80" class="sub">on-device TFLite inference</text>
+
+  <!-- → -->
+  <line x1="304" y1="56" x2="348" y2="56" class="arrow"/>
+  <text x="326" y="52" class="plus">▶</text>
+
+  <!-- Stage 3: usable area -->
+  <rect x="348" y="28" width="120" height="56" rx="12" class="stage db"/>
+  <rect x="348" y="28" width="120" height="20" rx="12" class="bar"/>
+  <text x="408" y="44" class="lbl">Usable-area engine</text>
+  <text x="408" y="64" class="sub">shaded footprint deducted</text>
+  <text x="408" y="80" class="sub">true usable area</text>
+
+  <!-- → -->
+  <line x1="468" y1="56" x2="512" y2="56" class="arrow"/>
+  <text x="490" y="52" class="plus">▶</text>
+
+  <!-- Stage 4: subsidy + PVGIS -->
+  <rect x="512" y="28" width="128" height="56" rx="12" class="stage tip"/>
+  <rect x="512" y="28" width="128" height="20" rx="12" class="bar"/>
+  <text x="576" y="44" class="lbl">PVGIS × PM Surya Ghar</text>
+  <text x="576" y="64" class="sub">irradiance + subsidies</text>
+  <text x="576" y="80" class="sub">system size, ROI, payback</text>
+
+  <!-- → -->
+  <line x1="640" y1="56" x2="684" y2="56" class="arrow"/>
+  <text x="662" y="52" class="plus">▶</text>
+
+  <!-- Stage 5: PDF report -->
+  <rect x="684" y="28" width="64" height="56" rx="12" class="stage rep"/>
+  <rect x="684" y="28" width="64" height="20" rx="12" class="bar"/>
+  <text x="716" y="44" class="lbl">PDF report</text>
+  <text x="716" y="64" class="sub">16 pages</text>
+  <text x="716" y="80" class="sub">on-device</text>
+
+  <!-- Caption -->
+  <text x="380" y="18" class="sub">Camera feed + motion  →  AR mapping  →  AI obstacles  →  usable area  ×  irradiance  →  export</text>
+</svg>
