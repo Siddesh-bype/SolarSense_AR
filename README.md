@@ -1,163 +1,214 @@
 # SolarSense ☀️📸
 
-**SolarSense** is a cutting-edge Flutter mobile application designed to democratize and simplify rooftop solar assessments. By leveraging Augmented Reality (AR) spatial mapping and Machine Learning (ML) object detection, SolarSense provides users with an instant, hyper-accurate, and 100% on-device solar feasibility report.
+<div align="center">
 
-Gone are the days of waiting for physical site visits. With SolarSense, users can map their rooftop, identify obstacles, calculate solar potential, estimate subsidies, and generate a professional-grade PDF report—all from their smartphone in under 2 minutes.
+<a href="https://github.com/Siddesh-bype/SolarSense_AR">
+  <img alt="SolarSense logo" src="https://raw.githubusercontent.com/Siddesh-bype/SolarSense_AR/main/assets/logo.png" width="96" />
+</a>
 
----
+<a href="https://github.com/Siddesh-bype/SolarSense_AR">
+  <img alt="Animated SolarSense product summary" src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1200&color=0891B2&center=true&vCenter=true&width=640&lines=On-device+rooftop+solar+assessment;AR+spatial+mapping+%2B+YOLOv8+obstacle+AI;PVGIS+irradiance+%2B+PM+Surya+Ghar+subsidies;16-page+PDF+report+in+under+2+minutes" />
+</a>
 
-## 🌟 Comprehensive Feature Set
+<br />
 
-### 1. AR Rooftop Spatial Mapping
-Instead of estimating roof size or looking up satellite imagery, SolarSense uses the device's native AR capabilities (ARCore/ARKit) to map the roof in real-time. Users drop virtual anchor points at the corners of their roof to instantly calculate the total spatial area in square meters.
+[![Flutter](https://img.shields.io/badge/app-Flutter-0891B2?style=flat-square)](https://flutter.dev/)
+[![ARCore](https://img.shields.io/badge/AR-ARCore/depth-API-0F172A?style=flat-square)](https://developers.google.com/ar)
+[![TensorFlow Lite](https://img.shields.io/badge/AI-YOLOv8n%20tflite-059669?style=flat-square)](https://www.tensorflow.org/lite)
+[![PVGIS](https://img.shields.io/badge/data-EU+PVGIS-0891B2?style=flat-square)](https://jointsoltechnologies.com/pvgis/)
+[![Subsidy](https://img.shields.io/badge/incentive-PM+Surya+Ghar-059669?style=flat-square)](https://www.pmindia.gov.in/en/news_updates/Solar+Lights)
+[![License](https://img.shields.io/badge/status-active-0F172A?style=flat-square)](#development)
 
-### 2. Edge-AI Obstacle Detection (YOLOv8)
-Roofs aren't always empty. Water tanks, HVAC units, and satellite dishes cause shading. The app runs a lightweight **YOLOv8 Nano (`yolov8n.tflite`)** object detection model directly on the camera feed using `tflite_flutter`. It automatically identifies these obstacles, computes their bounding boxes, and deducts the shaded area to calculate the *True Usable Area*.
+SolarSense turns your phone into an instant rooftop-solar assessor. Map a roof in
+AR, let on-device YOLOv8 route around AC units and water tanks, pull real
+irradiance from PVGIS, apply PM Surya Ghar subsidies, and export a 16-page PDF
+report — **100 % on-device, no account or server needed.**
 
-### 3. PVGIS Irradiance Integration
-The app fetches precise localized solar irradiance data (Peak Sun Hours, expected Annual kWh/kW yield) by interfacing with the European Commission's **PVGIS API** based on the phone's exact GPS coordinates (`geolocator`). 
-
-### 4. PM Surya Ghar Muft Bijli Yojana Engine
-Built specifically for the Indian market, SolarSense incorporates the latest slab-based subsidy logic from the **PM Surya Ghar** scheme:
-- Central Financial Assistance up to ₹78,000 for 3kW systems.
-- State-specific auxiliary subsidy multipliers (e.g., Gujarat, UP, Karnataka).
-- Net cost, ROI, and Payback period calculators based on regional tariffs.
-
-### 5. On-Device 16-Section PDF Generator
-Using the Dart `pdf` and `printing` packages, the app generates a highly detailed, natively drawn PDF report. **No backend servers or cloud generators (like Python's ReportLab) are required.** The PDF includes:
-- Executive summaries and system designs.
-- Auto-generated Cashflow & Generation charts (`fl_chart` data rasterized to PDF).
-- PM Surya Ghar Guides and Application Checklist.
-- Environmental Impact (Carbon offset equivalent).
-
-### 6. Provider & ALMM Brand Matching
-SolarSense features an integrated database of ALMM-approved Tier-1 solar manufacturers (e.g., Tata Power Solar, Adani Solar, Waaree, Vikram Solar). It recommends the best brands based on the user's calculated kW size and price sensitivity.
+</div>
 
 ---
 
-## 🏗️ Technical Architecture & Pipeline
+## Get the App
 
-SolarSense relies on a localized **Orchestration Pipeline** (`ScanOrchestrator`) that manages asynchronous tasks to deliver results instantly:
+<p align="center">
+  <a href="https://github.com/Siddesh-bype/SolarSense_AR/releases">
+    <img src="https://img.shields.io/github/v/release/Siddesh-bype/SolarSense_AR?color=0891B2&label=latest+release&style=for-the-badge" alt="Latest release" />
+  </a>
+</p>
 
-1. **Concurrent Fetching**:
-   - As the AR scan completes, `PvgisService` fires an HTTP request to get irradiance data.
-   - Simultaneously, `ObstacleService` runs the TFLite inference over the captured camera frame.
-2. **Synchronous Math calculations**:
-   - `annualKwh` and `systemKw` are calculated based on the net *Usable Area* and panel dimensions (e.g., Mono PERC 540W variants).
-   - `SubsidyService` executes the PM Surya Ghar bracket logic (Central + State formulas).
-   - `BrandService` queries the local JSON dataset to filter ALMM-compliant vendors.
-3. **Data Hydration**:
-   - The resulting `EnrichedScanResult` data class is passed directly to the `PdfReportGenerator` or the UI dashboards.
+| Android (debug / release) |
+| --- |
+| Run a debug build instantly: `flutter run` · Ship a release APK: `flutter build apk --release` |
 
----
-
-## 🧩 On-Device First & Backend Seams
-
-SolarSense is **on-device first**: every computation (AR mapping, obstacle
-detection, irradiance math, subsidy logic, PDF generation) runs locally. No
-account or server is required to get a full report. The only network call is an
-optional PVGIS irradiance lookup, which gracefully falls back to a regional
-estimate when offline.
-
-For teams that want cloud sync or lead hand-off, `lib/repositories/` defines
-clean boundaries:
-
-| Boundary | On-device default | Optional backend seam |
-|----------|-------------------|-----------------------|
-| `AuthRepository` | guest session (`UserSession`) | Firebase Auth |
-| `ScanRepository` | bounded in-memory cache | Firestore |
-| `LeadsRepository` | local lead queue | FastAPI `/leads` |
-
-The seams are sketched (commented, not imported) so enabling a backend never
-forces a `firebase_*` / `http` dependency into the build until you actually
-wire it. Swap the implementation in `main()` when ready.
+> **On a physical device:** ARCore, camera, and the TFLite model need real
+> hardware. The emulator cannot render the AR surface or run inference. The
+> release APK ships at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ---
 
-## 📂 Deep Dive: Project Structure
+## What It Does
+
+| Interview | Assessment | Recruiter workflow |
+| --- | --- | --- |
+| Maps the roof in real time with ARCore depth + plane detection | Computes True Usable Area after subtracting shaded/occupied footprint | Scores system size, subsidy, ROI and payback from your GPS coordinates |
+| Routes panels around obstacles detected by YOLOv8n | Derives peak sun hours and annual kWh from PVGIS | Matches ALMM-approved brands to your kW size and price band |
+| Lets you raise/tilt and hand-place modules | Applies PM Surya Ghar central + state subsidy slabs | Emits a 16-page on-device PDF with charts and checklists |
+
+---
+
+## Product Flow
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Siddesh-bype/SolarSense_AR/main/assets/logo.png" alt="SolarSense product workflow" width="56" />
+</p>
 
 ```text
-├── assets/
-│   ├── 3d_solar_panel/           # 3D models (GLB) for AR visualization 
-│   ├── data/                     # Offline databases (solar_brands.json, state_subsidies.json)
-│   └── models/                   # yolov8n.tflite (YOLOv8 Nano object detection model)
-├── lib/
-│   ├── core/theme/               # Centralized theming, typography, and color palettes
-│   ├── models/                   # Dart data classes (EnrichedScanResult, Report context)
-│   ├── screens/                  
-│   │   ├── auth/                 # Login and profile config
-│   │   ├── scan/                 # setup_scan_screen.dart & ar_camera_screen.dart
-│   │   └── report/               # Financial dashboards and PDF viewer
-│   └── services/                 # The Brains:
-│       ├── scan_orchestrator.dart      # Concurrency manager for scans
-│       ├── pdf_report_generator.dart   # 1400+ line vector PDF generator
-│       ├── pvgis_service.dart          # Remote irradiance data fetcher
-│       ├── obstacle_service.dart       # TFLite inferences & Shadow Area math
-│       ├── brand_service.dart          # Recommend ALMM brands by price bracket
-│       └── subsidy_service.dart        # State/Central PM Surya Ghar computations
-├── lib/repositories/             # Auth/Scan/Leads boundaries (on-device + seams)
-├── tools/                        # convert_yolo.py — PT→ONNX→TFLite pipeline
-└── pubspec.yaml                  # Project dependencies
+Camera feed + motion
+        |
+        v
+  ARCore plane + depth map
+        |
+        v
+  YOLOv8n obstacle detection
+        |
+        v
+  Usable-area × PVGIS irradiance × subsidy engine
+        |
+        v
+  16-page on-device PDF report
 ```
 
 ---
 
-## 🚀 Getting Started & Installation
+## Stack
+
+- **App:** Flutter 3, Dart — ARCore depth API, camera, TFLite inference
+- **Renderer:** Native OpenGL ES 2.0 (`ARRenderer.kt`) + `GLSurfaceView`
+- **AI:** `yolov8n.tflite` via `tflite_flutter`, NMS + IoU in Dart
+- **Data:** PVGIS irradiance, local ALMM brands + state subsidies JSON
+- **Reports:** `pdf` + `printing` + `fl_chart`, fully offline
+
+---
+
+## Quick Start
 
 ### Prerequisites
+- Flutter SDK `>= 3.10.4` (Dart bundled)
+- Android Studio cmdline tools + a **physical ARCore device**
+- USB / wireless debugging enabled
 
-*   Install **Flutter SDK** (`>= 3.10.4`) and ensure Dart is updated.
-*   Install Android Studio (for Android toolchain) or Xcode (for iOS toolchain).
-*   **Important**: Because this app heavily relies on Camera feeds, TFLite inferences, and ARCore/ARKit, **testing on a physical device is strongly recommended.**
+### 1. Clone & fetch
 
-### 1. Clone the Repository
 ```bash
 git clone https://github.com/Siddesh-bype/SolarSense_AR.git
 cd SolarSenseAR
-```
-
-### 2. Fetch Dependencies
-The project uses `tflite_flutter`, `pdf`, `fl_chart`, and `geolocator` among others. 
-```bash
 flutter pub get
 ```
-The on-device obstacle model `assets/models/yolov8n.tflite` is committed to the
-repo. To regenerate it (e.g. after retraining YOLOv8n), see
-[`tools/convert_yolo.md`](tools/convert_yolo.md) — the conversion uses an
-ONNX→TFLite path because Ultralytics' built-in TFLite exporter is Linux/macOS-only.
 
-### 3. Setup Android API Keys (If needed)
-Ensure you have the required capabilities enabled in `android/app/src/main/AndroidManifest.xml` (e.g., Camera permissions, Internet access, ARCore metadata).
+### 2. Android setup
+No API keys are required — ARCore auto-installs Google Play Services for AR on
+supported devices (the app degrades to manual roof-area entry otherwise; see
+[`android/app/src/main/AndroidManifest.xml`](android/app/src/main/AndroidManifest.xml)).
+The on-device model is committed:
+`assets/models/yolov8n.tflite`.
 
-### 4. Run the Application
-Connect your physical device via USB debugging or Wireless debugging.
+To regenerate it after a YOLOv8n retrain, see
+[`tools/convert_yolo.md`](tools/convert_yolo.md) — the converter uses the
+ONNX→TFLite path (Ultralytics' TFLite export is Linux/macOS only).
+
+### 3. Run
+
 ```bash
-flutter run
+flutter run            # debug on a connected device
+flutter build apk --release   # production APK
 ```
 
-### 5. Build for Release (Production)
-To evaluate the true performance of the TFLite models and the PDF generator, compile the app in release mode:
+---
+
+## Native Bridge (channel API)
+
+SolarSense's heavy lifting lives in Kotlin (`ARSceneManager` / `ARRenderer` /
+`PanelGridCalculator`); Flutter drives it through `MethodChannel` + `EventChannel`.
+
+| Method | Direction | Purpose |
+| --- | --- | --- |
+| `checkArAvailability` | Dart → Kotlin | Gating AR vs manual-entry overlay |
+| `autoFillMixed` | Dart → Kotlin | Shelf-pack mixed module sizes across the plane |
+| `applyObstacles` | Dart → Kotlin | Push YOLO boxes; native ray-casts keep-out zones |
+| `setPanelHeight` / `setAllPanelHeight` | Dart → Kotlin | 0–12 m elevation control |
+| `setPanelSize` / `configurePanelFlex` | Dart → Kotlin | Resize / re-orient a panel or the whole array |
+| `addPanel` / `removePanel` | Dart → Kotlin | Per-panel add/remove |
+| `selectPanelAt` / `movePanel` / `deletePanel` | Dart ←/→ Kotlin | Tap-select, drag, delete |
+| `captureFrame` | Dart → Kotlin | JPEG snapshot of the current frame |
+| `getScanSnapshot` | Kotlin → Dart | panelCount, systemKw, areaSqm, headingDeg |
+| `eventSink` (HUD) | Kotlin → Dart | live panelCount, systemKw, selectedPanelId, tracking |
+
+---
+
+## Development
+
 ```bash
+# Analyzer + formatters
+flutter analyze
+flutter format .
+
+# Unit tests (pure Dart, no emulator)
+flutter test
+
+# Release build / R8 keep-rules: native ARCore classes are guarded in
+# android/app/proguard-rules.pro; arsceneview is NOT a dependency.
 flutter build apk --release
 ```
-The output APK will be located at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ---
 
-## 📝 Subsidies & Brand Data (Context)
+## Project Map
 
-SolarSense uses localized data curated for the Indian solar market of 2026.
-*   **ALMM Compliance**: The app logic specifically prioritizes Approved List of Models and Manufacturers (ALMM) since only these panels qualify for the central subsidy.
-*   **Brands Integrated**: Tata Power Solar, Adani Solar, Waaree Energies, Vikram Solar, Luminous, Havells, and Loom Solar.
-*   **Subsidy Math**: For 2026, the PM Surya Ghar scheme offers ₹30,000 for 1kW, ₹60,000 for 2kW, and caps at ₹78,000 for 3kW or larger. SolarSense automatically brackets user capacities to display the precise out-of-pocket costs.
+```text
+SolarSenseAR/
+  android/app/src/main/kotlin/com/example/solarmitra/
+    ARRenderer.kt            OpenGL ES 2.0 camera + extruded-panel renderer
+    ARSceneManager.kt        ARCore session, per-panel model, touch/drag, packMixed
+    PanelGridCalculator.kt   mixed-size shelf packer + keep-out awareness
+    MainActivity.kt          platform view + method/event channels
+  lib/
+    core/theme/               app_colors.dart, app_theme.dart (SolarMitra v2)
+    models/                   enriched_scan_result.dart, obstacle_*.dart
+    screens/
+      scan/                   ar_camera_screen.dart, analysis_loading_screen.dart
+      report/                 financial_report_screen.dart, PDF viewer
+    services/                 scan_orchestrator.dart, subsidy_service.dart,
+                              pvgis_service.dart, obstacle_service.dart,
+                              brand_service.dart, pdf_report_generator.dart
+    repositories/             Auth/Scan/Leads seams (on-device + backends)
+  test/                       sun_path, monthly_profile, subsidy, obstacle IoU,
+                              panel_packer (mixed packer math)
+  assets/
+    models/yolov8n.tflite     on-device obstacle detector
+    data/                     solar_brands.json, state_subsidies.json, demo_obstacles.json
+    3d_solar_panel/           GLB module asset for AR reference
+tools/
+  convert_yolo.py             PT -> ONNX -> TFLite pipeline
+```
 
 ---
 
-## 🔒 Privacy & Offline Capability
+## Data & Privacy
 
-**Your data stays yours.** 
-Aside from the initial query to PVGIS for regional sun-hours (using your lat/lon), the entire application runs natively on the edge. The Roof mapping, the Machine Learning detection, the subsidy calculations, and the intensive 16-page PDF compilation all occur within the phone's memory. No photographs or metrics are sent to a persistent server.
+**Your data stays yours.** The roof mapping, camera frame, obstacle detection,
+irradiance, subsidies, and the 16-page PDF are all produced on-device. The only
+network call is an optional HTTPS fetch to PVGIS (lat/lon only); when it fails the
+app falls back to a regional irradiance estimate. No photos or metrics leave the
+device, and `probeiq.db`–style persistence is avoided — nothing is written to a
+server.
+
+Do not commit `.env` or local device logs.
 
 ---
 
-*“SolarSense: Built to empower faster, smarter, and independent solar energy transitions.”*
+<div align="center">
+
+*Built for homeowners and solar pros who want a real feasibility number before
+the site visit — not a brochure.*
+
+</div>
