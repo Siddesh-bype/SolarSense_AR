@@ -1,17 +1,70 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/user_session.dart';
+import '../../services/app_settings.dart';
+import '../../widgets/notification_sheet.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   String _initialsFrom(String name) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
         .toUpperCase();
+  }
+
+  void _infoSheet(BuildContext context, String title, String body) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        final c = AppColors.of(ctx);
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: c.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                title,
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: c.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                body,
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                  color: c.onSurfaceMuted,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -19,9 +72,12 @@ class ProfileScreen extends StatelessWidget {
     final c = AppColors.of(context);
     final tt = Theme.of(context).textTheme;
     final session = UserSession.instance;
-    final name =
-        (session.name == null || session.name!.isEmpty) ? 'Guest User' : session.name!;
-    final email = (session.email == null || session.email!.isEmpty) ? '—' : session.email!;
+    final name = (session.name == null || session.name!.isEmpty)
+        ? 'Guest User'
+        : session.name!;
+    final email = (session.email == null || session.email!.isEmpty)
+        ? '—'
+        : session.email!;
     final initials = _initialsFrom(name);
 
     return Scaffold(
@@ -32,7 +88,7 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'SOLARSENSE',
+          'SETTINGS',
           style: tt.titleMedium?.copyWith(
             color: AppColors.primaryDeep,
             fontWeight: FontWeight.w800,
@@ -42,13 +98,15 @@ class ProfileScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: Icon(Icons.notifications_none, color: c.onSurfaceMuted),
-            onPressed: () {},
+            onPressed: () => showNotificationsSheet(context),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24)
-            .copyWith(bottom: 100),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 24,
+        ).copyWith(bottom: 100),
         child: Column(
           children: [
             Center(
@@ -83,64 +141,174 @@ class ProfileScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: c.border),
                     ),
-                    child: Icon(Icons.edit, color: AppColors.primaryDeep, size: 16),
+                    child: Icon(
+                      Icons.edit,
+                      color: AppColors.primaryDeep,
+                      size: 16,
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            Text(name,
-                style: tt.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700, color: c.onSurface)),
+            Text(
+              name,
+              style: tt.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: c.onSurface,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(email,
-                style: tt.bodySmall?.copyWith(
-                    color: c.onSurfaceMuted, fontWeight: FontWeight.w500)),
+            Text(
+              email,
+              style: tt.bodySmall?.copyWith(
+                color: c.onSurfaceMuted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 32),
 
             Row(
               children: [
                 Expanded(
-                  child: _bentoStat(Icons.view_in_ar, '3', 'SCANS', c.primary, c),
+                  child: _bentoStat(
+                    Icons.view_in_ar,
+                    '3',
+                    'SCANS',
+                    c.primary,
+                    c,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: _bentoStat(Icons.analytics, '1', 'REPORT',
-                      AppColors.goldDeep, c),
+                  child: _bentoStat(
+                    Icons.analytics,
+                    '1',
+                    'REPORT',
+                    AppColors.goldDeep,
+                    c,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 32),
 
             _menuGroup(tt, c, 'General', [
-              _menuItem(c, Icons.history, 'Saved Scans', c.primary),
-              _menuItem(c, Icons.description, 'My Reports', AppColors.goldDeep),
-              _menuItem(c, Icons.notifications, 'Notifications', c.onSurfaceMuted),
+              _menuItem(
+                c,
+                Icons.history,
+                'Saved Scans',
+                c.primary,
+                onTap: () => _infoSheet(
+                  context,
+                  'Saved Scans',
+                  'No saved scans yet. Start an AR scan from the Home tab and your rooftop assessments will appear here.',
+                ),
+              ),
+              _menuItem(
+                c,
+                Icons.description,
+                'My Reports',
+                AppColors.goldDeep,
+                onTap: () => Navigator.pushNamed(context, '/report'),
+              ),
+              _menuItem(
+                c,
+                Icons.notifications,
+                'Notifications',
+                c.onSurfaceMuted,
+                onTap: () => showNotificationsSheet(context),
+              ),
             ]),
             const SizedBox(height: 24),
             _menuGroup(tt, c, 'Preferences', [
-              _menuItem(c, Icons.translate, 'Language', c.onSurfaceMuted,
-                  trailing: Text('English', style: TextStyle(color: c.onSurfaceMuted, fontSize: 13))),
-              _menuItem(c, Icons.help_outline, 'Help', c.onSurfaceMuted),
-              _menuItem(c, Icons.verified_user_outlined, 'Privacy', c.onSurfaceMuted),
+              ListenableBuilder(
+                listenable: AppSettings.instance,
+                builder: (context, _) {
+                  final isDark = AppSettings.instance.isDark;
+                  return _menuItem(
+                    c,
+                    isDark
+                        ? Icons.dark_mode_outlined
+                        : Icons.light_mode_outlined,
+                    isDark ? 'Dark Mode' : 'Light Mode',
+                    c.onSurfaceMuted,
+                    trailing: Switch(
+                      value: isDark,
+                      onChanged: (v) => AppSettings.instance.setDark(v),
+                    ),
+                  );
+                },
+              ),
+              _menuItem(
+                c,
+                Icons.translate,
+                'Language',
+                c.onSurfaceMuted,
+                trailing: Text(
+                  'English',
+                  style: TextStyle(color: c.onSurfaceMuted, fontSize: 13),
+                ),
+                onTap: () => _infoSheet(
+                  context,
+                  'Language',
+                  'English (India) is the only available language right now. More languages are on the way.',
+                ),
+              ),
+              _menuItem(
+                c,
+                Icons.help_outline,
+                'Help',
+                c.onSurfaceMuted,
+                onTap: () => _infoSheet(
+                  context,
+                  'Help & Support',
+                  'How SolarSense works:\n\n1. Tap Start AR Scan on Home.\n2. Point the camera at your rooftop.\n3. Panels are placed around obstacles automatically.\n4. Get a 16-page PDF report with subsidies and payback.\n\nFor help email support@solarsense.app',
+                ),
+              ),
+              _menuItem(
+                c,
+                Icons.verified_user_outlined,
+                'Privacy',
+                c.onSurfaceMuted,
+                onTap: () => _infoSheet(
+                  context,
+                  'Privacy',
+                  'Your data stays on-device. Rooftop mapping, camera frames, and the PDF report are never uploaded. The only network calls are to PVGIS (irradiance, lat/lon only) and Open-Meteo (live solar radiation).',
+                ),
+              ),
             ]),
             const SizedBox(height: 32),
 
             SizedBox(
               width: double.infinity,
               child: TextButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.logout, color: AppColors.error),
-                label: const Text('Logout',
-                    style: TextStyle(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
+                onPressed: () {
+                  session.clear();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Local data cleared')),
+                  );
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/home',
+                    (route) => false,
+                  );
+                },
+                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                label: const Text(
+                  'Reset App Data',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
                 style: TextButton.styleFrom(
                   backgroundColor: c.error.withValues(alpha: 0.08),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape:
-                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
@@ -148,15 +316,19 @@ class ProfileScreen extends StatelessWidget {
 
             Column(
               children: [
-                Text('SOLARSENSE PREMIUM',
-                    style: tt.labelSmall?.copyWith(
-                      color: c.onSurfaceMuted,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2.0,
-                    )),
+                Text(
+                  'SOLARSENSE PREMIUM',
+                  style: tt.labelSmall?.copyWith(
+                    color: c.onSurfaceMuted,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.0,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('v1.0.0',
-                    style: tt.bodySmall?.copyWith(color: c.onSurfaceMuted)),
+                Text(
+                  'v1.0.0',
+                  style: tt.bodySmall?.copyWith(color: c.onSurfaceMuted),
+                ),
               ],
             ),
           ],
@@ -167,7 +339,12 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _bentoStat(
-      IconData icon, String value, String label, Color color, SolarPalette c) {
+    IconData icon,
+    String value,
+    String label,
+    Color color,
+    SolarPalette c,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -180,42 +357,61 @@ class ProfileScreen extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 28),
           const SizedBox(height: 12),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: c.onSurface)),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: c.onSurfaceMuted,
-                  letterSpacing: 1.5)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: c.onSurface,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: c.onSurfaceMuted,
+              letterSpacing: 1.5,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _menuGroup(TextTheme tt, SolarPalette c, String title, List<Widget> items) {
+  Widget _menuGroup(
+    TextTheme tt,
+    SolarPalette c,
+    String title,
+    List<Widget> items,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Text(title.toUpperCase(),
-              style: tt.labelSmall?.copyWith(
-                color: c.onSurfaceMuted,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.5,
-              )),
+          child: Text(
+            title.toUpperCase(),
+            style: tt.labelSmall?.copyWith(
+              color: c.onSurfaceMuted,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+            ),
+          ),
         ),
         Column(children: items),
       ],
     );
   }
 
-  Widget _menuItem(SolarPalette c, IconData icon, String label, Color iconColor,
-      {Widget? trailing}) {
+  Widget _menuItem(
+    SolarPalette c,
+    IconData icon,
+    String label,
+    Color iconColor, {
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -234,8 +430,10 @@ class ProfileScreen extends StatelessWidget {
           ),
           child: Icon(icon, color: iconColor),
         ),
-        title: Text(label,
-            style: TextStyle(fontWeight: FontWeight.w600, color: c.onSurface)),
+        title: Text(
+          label,
+          style: TextStyle(fontWeight: FontWeight.w600, color: c.onSurface),
+        ),
         trailing: trailing != null
             ? Row(
                 mainAxisSize: MainAxisSize.min,
@@ -246,7 +444,7 @@ class ProfileScreen extends StatelessWidget {
                 ],
               )
             : Icon(Icons.chevron_right, color: c.onSurfaceMuted),
-        onTap: () {},
+        onTap: onTap,
       ),
     );
   }
@@ -266,7 +464,9 @@ class ProfileScreen extends StatelessWidget {
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
         BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Scan'),
         BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_ind), label: 'Subsidies & Pros'),
+          icon: Icon(Icons.assignment_ind),
+          label: 'Subsidies & Pros',
+        ),
         BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Reports'),
         BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
       ],

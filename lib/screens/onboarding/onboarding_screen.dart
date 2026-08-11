@@ -16,17 +16,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<Map<String, dynamic>> _slides = [
     {
       "title": "See before you install",
-      "subtitle": "Point your camera at any rooftop and watch solar panels appear exactly where they'd sit.",
+      "subtitle":
+          "Point your camera at any rooftop and watch solar panels appear exactly where they'd sit.",
       "icon": Icons.home_work_outlined,
     },
     {
       "title": "Smart analysis, on-device",
-      "subtitle": "Generation estimates, shadow, and obstacle detection — computed right on your phone.",
+      "subtitle":
+          "Generation estimates, shadow, and obstacle detection — computed right on your phone.",
       "icon": Icons.auto_awesome,
     },
     {
       "title": "Know your savings",
-      "subtitle": "Instant cost breakdown, PM Surya Ghar subsidy up to ₹78,000, and a 25-year savings report.",
+      "subtitle":
+          "Instant cost breakdown, PM Surya Ghar subsidy up to ₹78,000, and a 25-year savings report.",
       "icon": Icons.request_quote_outlined,
     },
   ];
@@ -38,7 +41,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      Navigator.pushReplacementNamed(context, '/auth');
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 
@@ -58,7 +61,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         automaticallyImplyLeading: false,
         actions: [
           TextButton(
-            onPressed: () => Navigator.pushReplacementNamed(context, '/auth'),
+            onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
             child: Text(
               'Skip',
               style: theme.textTheme.labelLarge?.copyWith(
@@ -92,10 +95,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               gradient: LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [
-                                  c.primarySoft,
-                                  c.surface,
-                                ],
+                                colors: [c.primarySoft, c.surface],
                               ),
                               borderRadius: BorderRadius.circular(32),
                               border: Border.all(color: c.border),
@@ -120,14 +120,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     borderRadius: BorderRadius.circular(36),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: c.primary.withValues(alpha: 0.15),
+                                        color: c.primary.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         blurRadius: 30,
                                         offset: const Offset(0, 12),
                                       ),
                                     ],
                                   ),
-                                  child: Icon(_slides[index]["icon"],
-                                      size: 64, color: c.primary),
+                                  child: Icon(
+                                    _slides[index]["icon"],
+                                    size: 64,
+                                    color: c.primary,
+                                  ),
                                 ),
                               ],
                             ),

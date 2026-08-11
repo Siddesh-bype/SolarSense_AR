@@ -5,7 +5,9 @@ import '../../services/user_session.dart';
 import '../../services/location_service.dart';
 import '../../services/pvgis_service.dart';
 import '../../services/subsidy_service.dart';
+import '../../services/open_meteo_service.dart';
 import '../../services/link_opener.dart';
+import '../../widgets/notification_sheet.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,7 +25,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     _howItWorksController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 3000));
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
     _playAnimationSequence();
     _loadLiveData();
   }
@@ -41,50 +45,74 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
-  // ── Live solar data (PVGIS + user session) ────────────────────────────────
-  bool _liveLoading = false;
+  // ── Live solar data (PVGIS + Open-Meteo + location) ───────────────────────
+  bool _liveLoading = true;
   bool _liveReady = false;
   double? _liveSavedMonthly;
   double? _livePaybackYears;
   double? _liveCo2T;
-  String _liveCaption = 'Live numbers appear once you set up a scan';
+  double? _liveWm2;
+  bool _liveIsDay = true;
+  String _liveCity = '';
+  String _liveCaption = 'Fetching live solar data…';
 
   final _pvgis = PvgisService();
   final _subsidy = SubsidyService();
   final _location = LocationService();
+  final _openMeteo = OpenMeteoService();
+
+  // Defaults so the dashboard always shows real numbers on first launch.
+  static const double _kDefaultBill = 1200; // ₹/month assumed until a scan
+  static const double _kDefaultTariff = 7.0; // ₹/kWh assumed until a scan
 
   Future<void> _loadLiveData() async {
-    final s = UserSession.instance;
-    if (s.monthlyBillInr == null || s.stateKey == null) return;
     setState(() => _liveLoading = true);
     try {
       await _subsidy.init();
-      double lat = s.lat ?? 0, lon = s.lon ?? 0;
+      double lat = UserSession.instance.lat ?? 0;
+      double lon = UserSession.instance.lon ?? 0;
+      String? stateKey = UserSession.instance.stateKey;
       if (lat == 0 && lon == 0) {
         final loc = await _location.getCurrentLatLon();
         lat = loc.lat;
         lon = loc.lon;
       }
-      final irr = await _pvgis.fetchIrradiance(lat, lon, s.stateKey);
-      final tariff = s.avgTariffInr ?? 7.0;
-      final monthlyKwh = s.monthlyBillInr! / tariff;
+      final placemark = await _location.reverseGeocode(lat, lon);
+      final city = placemark?.city;
+      stateKey ??= placemark?.stateKey;
+
+      // 1) PVGIS real irradiance for the coordinates.
+      final irr = await _pvgis.fetchIrradiance(lat, lon, stateKey);
+      // 2) Open-Meteo live shortwave radiation right now.
+      final live = await _openMeteo.fetchCurrentSolar(lat, lon);
+
+      final tariff = UserSession.instance.avgTariffInr ?? _kDefaultTariff;
+      final bill = UserSession.instance.monthlyBillInr ?? _kDefaultBill;
+      final monthlyKwh = bill / tariff;
       final systemKw = monthlyKwh / (irr.peakSunHours * 30);
       final annualKwh = systemKw * irr.annualKwhPerKw;
       final sub = _subsidy.calculate(
         systemKw: systemKw,
-        stateName: s.stateKey!,
+        stateName: stateKey ?? 'maharashtra',
         annualKwh: annualKwh,
         avgTariff: tariff,
       );
       if (!mounted) return;
       setState(() {
-        _liveSavedMonthly = s.monthlyBillInr! * 0.72;
+        _liveSavedMonthly = bill * 0.72;
         _livePaybackYears = sub.paybackYears;
         _liveCo2T = annualKwh * 0.82 / 1000;
+        _liveWm2 = live.shortwaveRadiation;
+        _liveIsDay = live.isDay;
+        _liveCity = city ?? '';
         _liveReady = true;
         _liveCaption = irr.isFallback
             ? 'Live • ${irr.peakSunHours} sun hrs/day (regional estimate)'
             : 'Live • ${irr.peakSunHours} sun hrs/day from PVGIS';
+        if (_liveCity.isNotEmpty) {
+          _liveCaption =
+              'Live • $_liveCity • ${_liveCaption.replaceFirst('Live • ', '')}';
+        }
       });
     } catch (_) {
       // Keep the idle placeholders — the scan continues to work regardless.
@@ -96,16 +124,22 @@ class _DashboardScreenState extends State<DashboardScreen>
   List<Map<String, dynamic>> _buildQuickStats(SolarPalette c) {
     if (!_liveReady) {
       return const [
-        {"label": "Avg. Monthly Savings", "value": "—", "tone": "primary"},
+        {"label": "Live Irradiance", "value": "—", "tone": "primary"},
+        {"label": "Avg. Monthly Savings", "value": "—", "tone": "ink"},
         {"label": "Typical Payback", "value": "—", "tone": "ink"},
         {"label": "CO₂ Saved", "value": "—", "tone": "success"},
       ];
     }
+    final wm2 = _liveWm2;
+    final wm2Str = wm2 == null
+        ? '—'
+        : (_liveIsDay ? '${wm2.toStringAsFixed(0)} W/m²' : 'Night ☾');
     return [
+      {"label": "Live Irradiance", "value": wm2Str, "tone": "primary"},
       {
         "label": "Avg. Monthly Savings",
         "value": "₹${_liveSavedMonthly!.toStringAsFixed(0)}",
-        "tone": "primary",
+        "tone": "ink",
       },
       {
         "label": "Typical Payback",
@@ -121,9 +155,24 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   final List<Map<String, dynamic>> _howItWorks = [
-    {"icon": Icons.camera_alt_outlined, "label": "Scan Roof", "step": "01"},
-    {"icon": Icons.solar_power_outlined, "label": "Place Panels", "step": "02"},
-    {"icon": Icons.bar_chart_outlined, "label": "Get Report", "step": "03"},
+    {
+      "icon": Icons.camera_alt_outlined,
+      "label": "Scan Roof",
+      "step": "01",
+      "route": "/scan/setup",
+    },
+    {
+      "icon": Icons.solar_power_outlined,
+      "label": "Place Panels",
+      "step": "02",
+      "route": "/scan/setup",
+    },
+    {
+      "icon": Icons.bar_chart_outlined,
+      "label": "Get Report",
+      "step": "03",
+      "route": "/report",
+    },
   ];
 
   final List<Map<String, dynamic>> _schemeLinks = [
@@ -263,11 +312,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _showNotifications() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => const _NotificationSheet(),
-    );
+    showNotificationsSheet(context);
   }
 
   Widget _buildStatsScroll(SolarPalette c) {
@@ -283,10 +328,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               children: List.generate(stats.length, (i) {
                 return Expanded(
                   child: Container(
-                    margin:
-                        EdgeInsets.only(right: i == stats.length - 1 ? 0 : 8),
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                    margin: EdgeInsets.only(
+                      right: i == stats.length - 1 ? 0 : 8,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                      horizontal: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: c.surface,
                       borderRadius: BorderRadius.circular(16),
@@ -323,8 +371,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: _liveReady ? AppColors.successSoft : c.surfaceMuted,
                   borderRadius: BorderRadius.circular(20),
@@ -382,29 +429,36 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Color _toneColor(String tone, SolarPalette c) => switch (tone) {
-        'primary' => AppColors.primaryDeep,
-        'success' => AppColors.success,
-        _ => c.onSurface,
-      };
+    'primary' => AppColors.primaryDeep,
+    'success' => AppColors.success,
+    _ => c.onSurface,
+  };
 
   Widget _buildHeroCta(SolarPalette c) {
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              SetupScanScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-                    CurvedAnimation(parent: animation, curve: Curves.easeOutQuart)),
-                child: child,
-              ),
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 600),
-        ));
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                SetupScanScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutQuart,
+                        ),
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+            transitionDuration: const Duration(milliseconds: 600),
+          ),
+        );
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -456,11 +510,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(20),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                    ),
                   ),
-                  child: const Icon(Icons.camera_alt_outlined,
-                      color: Colors.white, size: 32),
+                  child: const Icon(
+                    Icons.camera_alt_outlined,
+                    color: Colors.white,
+                    size: 32,
+                  ),
                 ),
               ],
             ),
@@ -482,8 +540,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward,
-                      color: AppColors.goldDeep, size: 18),
+                  const Icon(
+                    Icons.arrow_forward,
+                    color: AppColors.goldDeep,
+                    size: 18,
+                  ),
                 ],
               ),
             ),
@@ -512,76 +573,88 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ? (_howItWorksController.value - start) / 0.3
                         : 0.0,
                   );
-                  double scale = 1.0 + (curve <= 0.5 ? curve * 0.1 : (1 - curve) * 0.1);
+                  double scale =
+                      1.0 + (curve <= 0.5 ? curve * 0.1 : (1 - curve) * 0.1);
                   return Transform.scale(
                     scale: scale,
                     child: Row(
                       children: [
                         Expanded(
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: c.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: AppColors.primary
-                                    .withValues(alpha: 0.15 + curve * 0.35),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary
-                                      .withValues(alpha: curve * 0.16),
-                                  blurRadius: 12 + (curve * 8),
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
+                          child: GestureDetector(
+                            onTap: () => Navigator.pushNamed(
+                              context,
+                              _howItWorks[i]['route'] as String,
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: c.primarySoft,
-                                    borderRadius: BorderRadius.circular(13),
-                                  ),
-                                  child: Icon(_howItWorks[i]["icon"],
-                                      color: AppColors.primaryDeep, size: 20),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _howItWorks[i]["label"],
-                                  textAlign: TextAlign.center,
-                                  style: _tt.labelSmall?.copyWith(
-                                    color: c.onSurface,
-                                    fontWeight: FontWeight.w600,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: c.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.15 + curve * 0.35,
                                   ),
                                 ),
-                                Text(
-                                  _howItWorks[i]["step"],
-                                  style: TextStyle(
-                                    color: c.primary.withValues(alpha: 0.7),
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(
+                                      alpha: curve * 0.16,
+                                    ),
+                                    blurRadius: 12 + (curve * 8),
+                                    offset: const Offset(0, 4),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      color: c.primarySoft,
+                                      borderRadius: BorderRadius.circular(13),
+                                    ),
+                                    child: Icon(
+                                      _howItWorks[i]["icon"],
+                                      color: AppColors.primaryDeep,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    _howItWorks[i]["label"],
+                                    textAlign: TextAlign.center,
+                                    style: _tt.labelSmall?.copyWith(
+                                      color: c.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    _howItWorks[i]["step"],
+                                    style: TextStyle(
+                                      color: c.primary.withValues(alpha: 0.7),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                         if (i < _howItWorks.length - 1)
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
                             child: AnimatedBuilder(
                               animation: _howItWorksController,
                               builder: (context, child) => Icon(
                                 Icons.arrow_forward_rounded,
                                 size: 18,
-                                color: c.primary
-                                    .withValues(alpha: curve > 0.1 ? 0.9 : 0.2),
+                                color: c.primary.withValues(
+                                  alpha: curve > 0.1 ? 0.9 : 0.2,
+                                ),
                               ),
                             ),
                           ),
@@ -604,7 +677,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: List.generate(_schemeLinks.length, (i) {
           final link = _schemeLinks[i];
           return Container(
-            margin: EdgeInsets.only(bottom: i == _schemeLinks.length - 1 ? 0 : 10),
+            margin: EdgeInsets.only(
+              bottom: i == _schemeLinks.length - 1 ? 0 : 10,
+            ),
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(14),
@@ -623,8 +698,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                   color: c.primarySoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(link['icon'] as IconData,
-                    color: AppColors.primaryDeep, size: 20),
+                child: Icon(
+                  link['icon'] as IconData,
+                  color: AppColors.primaryDeep,
+                  size: 20,
+                ),
               ),
               title: Text(
                 link['title'] as String,
@@ -637,8 +715,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 link['subtitle'] as String,
                 style: _tt.bodySmall?.copyWith(color: c.onSurfaceMuted),
               ),
-              trailing: const Icon(Icons.open_in_new,
-                  size: 18, color: AppColors.primaryDeep),
+              trailing: const Icon(
+                Icons.open_in_new,
+                size: 18,
+                color: AppColors.primaryDeep,
+              ),
             ),
           );
         }),
@@ -664,8 +745,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               color: c.primarySoft,
               borderRadius: BorderRadius.circular(22),
             ),
-            child: const Icon(Icons.wb_sunny_outlined,
-                color: AppColors.primaryDeep, size: 32),
+            child: const Icon(
+              Icons.wb_sunny_outlined,
+              color: AppColors.primaryDeep,
+              size: 32,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -705,176 +789,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
         BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Scan'),
         BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_ind), label: 'Subsidies & Pros'),
+          icon: Icon(Icons.assignment_ind),
+          label: 'Subsidies & Pros',
+        ),
         BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Reports'),
         BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
       ],
     );
   }
-}
-
-// ─── Notification Bottom Sheet ─────────────────────────────────────────────
-class _NotificationSheet extends StatelessWidget {
-  const _NotificationSheet();
-
-  List<_Notif> _buildNotifs() {
-    final bill = UserSession.instance.monthlyBillInr;
-    final billStr = bill == null ? 'your current bill' : '₹${bill.toStringAsFixed(0)}';
-    return [
-      const _Notif(Icons.wb_sunny_outlined, 'Solar Tip',
-          'Today is sunny — ideal for running your high-power appliances to save on bills.',
-          '2 min ago', true),
-      const _Notif(Icons.account_balance_outlined, 'PM Surya Ghar',
-          'Central subsidy up to ₹78,000 for 3kW+ systems is now open.',
-          '1 hr ago', true, url: 'https://pmsuryaghar.gov.in'),
-      const _Notif(Icons.bar_chart_outlined, 'Report Ready',
-          'Your last AR scan analysis has been processed. Tap to view.',
-          '3 hrs ago', false),
-      _Notif(Icons.bolt_outlined, 'Energy Alert',
-          'Your estimated monthly bill of $billStr can be reduced by up to 72% with solar.',
-          'Yesterday', false),
-    ];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final notifs = _buildNotifs();
-    final c = AppColors.of(context);
-    final tt = Theme.of(context).textTheme;
-    return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.4,
-      maxChildSize: 0.85,
-      builder: (ctx, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: c.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Notifications',
-                      style: tt.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700, color: c.onSurface)),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: c.primarySoft,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('2 new',
-                        style: TextStyle(
-                            color: AppColors.primaryDeep,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.separated(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: notifs.length,
-                separatorBuilder: (context, index) =>
-                    Divider(indent: 72, endIndent: 16, height: 1),
-                itemBuilder: (_, i) {
-                  final n = notifs[i];
-                  return ListTile(
-                    onTap: n.url == null
-                        ? null
-                        : () => openExternalLink(n.url!,
-                            context: context, label: n.title),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: (n.isNew ? c.primarySoft : c.surfaceMuted),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(n.icon,
-                          color: n.isNew ? AppColors.primaryDeep : c.onSurfaceMuted,
-                          size: 22),
-                    ),
-                    title: Row(
-                      children: [
-                        Text(n.title,
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight:
-                                    n.isNew ? FontWeight.w700 : FontWeight.w600,
-                                color: c.onSurface)),
-                        if (n.isNew) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ]
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 3),
-                        Text(n.body,
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: c.onSurfaceMuted,
-                                height: 1.4)),
-                        const SizedBox(height: 4),
-                        Text(
-                          n.time,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: c.primary.withValues(alpha: 0.85),
-                              fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                    isThreeLine: true,
-                    tileColor:
-                        n.isNew ? c.primarySoft.withValues(alpha: 0.35) : Colors.transparent,
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Notif {
-  final IconData icon;
-  final String title;
-  final String body;
-  final String time;
-  final bool isNew;
-  final String? url;
-  const _Notif(this.icon, this.title, this.body, this.time, this.isNew,
-      {this.url});
 }
