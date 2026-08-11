@@ -259,13 +259,11 @@ class _ARCameraScreenState extends State<ARCameraScreen> {
     if (_arSupported == false) {
       return _ManualAreaScreen(
         onSubmit: (areaSqm) {
-          final size = _panelSizes[_panelSizeIndex];
-          final perPanel = size.width * size.height;
-          final count = (areaSqm * 0.75 / perPanel).floor().clamp(0, 400);
+          // Area-only route: the manual-entry analysis path derives panel count
+          // and system kW from a mixed-size packer in analysis_loading_screen.
           Navigator.pushReplacementNamed(context, '/scan/loading', arguments: {
-            'panelCount': count,
-            'systemKw': count * size.watts / 1000.0,
             'areaSqm': areaSqm,
+            'isManualEntry': true,
             'headingDeg': 0.0,
           });
         },

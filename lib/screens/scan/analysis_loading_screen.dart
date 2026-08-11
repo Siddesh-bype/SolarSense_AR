@@ -1,11 +1,21 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:math';
 import '../../core/theme/app_colors.dart';
 import '../../models/enriched_scan_result.dart';
 import '../../services/location_service.dart';
+import '../../services/panel_packer.dart';
 import '../../services/scan_orchestrator.dart';
 import '../../services/user_session.dart';
+
+/// Three SKUs mirrored from the native PanelGridCalculator catalogue
+/// (largest first so the packer back-fills with the smaller modules).
+final List<PanelSpec> _kManualCatalog = const [
+  PanelSpec('Large 700W', 2.00, 1.30, 700),
+  PanelSpec('Standard 540W', 1.70, 1.14, 540),
+  PanelSpec('Compact 460W', 1.60, 1.00, 460),
+];
 
 class AnalysisLoadingScreen extends StatefulWidget {
   const AnalysisLoadingScreen({super.key});
@@ -46,9 +56,10 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
       final panelCount = (args['panelCount'] as num?)?.toInt() ?? 0;
       final systemKw = (args['systemKw'] as num?)?.toDouble() ?? 0.0;
       final areaSqm = (args['areaSqm'] as num?)?.toDouble() ?? 0.0;
+      final isManualEntry = args['isManualEntry'] as bool? ?? false;
 
-      if (panelCount <= 0 || systemKw <= 0 || areaSqm <= 0) {
-        throw StateError('AR scan did not produce valid panel layout. Please rescan.');
+      if (areaSqm <= 0) {
+        throw StateError('No roof area supplied. Please scan or enter an area manually.');
       }
       if (_session.stateKey == null || _session.monthlyBillInr == null) {
         throw StateError('Missing user setup data. Please complete the setup form.');
@@ -81,6 +92,25 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
           (userAreaM2 != null && userAreaM2 < areaSqm) ? userAreaM2 : areaSqm;
       final usableAreaM2 = effectiveTotalArea * usableRatio;
 
+      // AR scans arrive with a real panel count + system kW from the native
+      // packer. The manual-area route only carries `areaSqm` (isManualEntry), so
+      // derive a mixed-size layout here so the report still reflects a real array
+      // rather than a single uniform module.
+      var effPanelCount = panelCount;
+      var effSystemKw = systemKw;
+      if (isManualEntry || (panelCount <= 0 && systemKw <= 0)) {
+        final side = sqrt(usableAreaM2);
+        final packed = packMixed(
+          plane: Extent(side, side),
+          catalog: _kManualCatalog,
+          maxPanels: 400,
+        );
+        effPanelCount = packed.panels.length;
+        effSystemKw = packed.totalKw;
+      } else if (panelCount <= 0 || systemKw <= 0) {
+        throw StateError('AR scan did not produce valid panel layout. Please rescan.');
+      }
+
       final monthlyBill = _session.monthlyBillInr ?? 0;
       final priceSensitivity = monthlyBill < 1500
           ? 'budget'
@@ -89,16 +119,17 @@ class _AnalysisLoadingScreenState extends State<AnalysisLoadingScreen>
       EnrichedScanResult result = await _orchestrator.enrichScan(
         lat: lat,
         lon: lon,
-        systemKw: systemKw,
+        systemKw: effSystemKw,
         stateName: _session.stateKey!,
         totalAreaM2: effectiveTotalArea,
         usableAreaM2: usableAreaM2,
-        panelCount: panelCount,
+        panelCount: effPanelCount,
         avgTariff: avgTariff,
         priceSensitivity: priceSensitivity,
         cameraFrame: args['cameraFrame'] as Uint8List?,
-        headingDeg: args['headingDeg'] as double?,
-      );
+         headingDeg: args['headingDeg'] as double?,
+        );
+        result = result.copyWith(isManualEntry: isManualEntry);
 
       if (monthlyBill > 0) {
         final maxAnnualSavings = monthlyBill * 12.0;

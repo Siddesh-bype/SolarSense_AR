@@ -16,7 +16,7 @@ object PanelGridCalculator {
     const val PANEL_W = 1.70f
     const val PANEL_D = 1.14f
     const val PANEL_AREA = PANEL_W * PANEL_D   // 1.938 m²
-    private const val GAP  = 0.06f
+    const val GAP = 0.06f
     private const val MAX_PANELS = 24
 
     data class FlexSpec(val widthM: Float, val heightM: Float, val layout: PanelLayout)
@@ -78,5 +78,66 @@ object PanelGridCalculator {
     fun maxPanelsFor(areaSqm: Float, spec: FlexSpec = FlexSpec(PANEL_W, PANEL_D, PanelLayout.AUTO)): Int {
         val cell = spec.widthM * spec.heightM
         return (areaSqm / cell).toInt().coerceAtMost(MAX_PANELS)
+    }
+
+    /** A packed module: plane-local centre plus the size actually used there. */
+    data class PlacedPanel(val x: Float, val z: Float, val widthM: Float, val heightM: Float)
+
+    /**
+     * Mixed-size shelf packing over the plane rectangle.
+     *
+     * Lays out rows ("shelves") front to back. Each row takes the largest module
+     * whose depth still fits, then fills along the row with the largest module
+     * that fits the remaining width — so a leftover strip too narrow for a 700 W
+     * module still takes a compact one instead of being wasted. Cells landing on
+     * an obstacle [keepOuts] zone are skipped, and the whole packed block is
+     * centred on the plane so it reads as a deliberate array.
+     */
+    fun packMixed(
+        plane: Plane,
+        catalog: List<FlexSpec>,
+        keepOuts: List<KeepOut> = emptyList(),
+        max: Int = MAX_PANELS,
+    ): List<PlacedPanel> {
+        if (catalog.isEmpty()) return emptyList()
+        val extX = plane.extentX.coerceAtLeast(0.5f)
+        val extZ = plane.extentZ.coerceAtLeast(0.5f)
+
+        // Orient every module to the roof's long axis, then try biggest first.
+        val landscape = extX >= extZ
+        val sizes = catalog
+            .map {
+                val w = if (landscape) maxOf(it.widthM, it.heightM) else minOf(it.widthM, it.heightM)
+                val d = if (landscape) minOf(it.widthM, it.heightM) else maxOf(it.widthM, it.heightM)
+                FlexSpec(w, d, it.layout)
+            }
+            .sortedByDescending { it.widthM * it.heightM }
+
+        val out = mutableListOf<PlacedPanel>()
+        var z = 0f
+        while (z < extZ && out.size < max) {
+            val rowSpec = sizes.firstOrNull { z + it.heightM + GAP <= extZ } ?: break
+            val rowDepth = rowSpec.heightM
+            val cz = z + rowDepth / 2f - extZ / 2f
+
+            var x = 0f
+            while (x < extX && out.size < max) {
+                // Largest module that fits the remaining width AND this row's depth.
+                val cell = sizes.firstOrNull {
+                    it.heightM <= rowDepth && x + it.widthM + GAP <= extX
+                } ?: break
+                val cx = x + cell.widthM / 2f - extX / 2f
+                val blocked = keepOuts.any {
+                    it.overlaps(cx, cz, cell.widthM / 2f, cell.heightM / 2f)
+                }
+                if (!blocked) out += PlacedPanel(cx, cz, cell.widthM, cell.heightM)
+                x += cell.widthM + GAP
+            }
+            z += rowDepth + GAP
+        }
+
+        // Centre-outward ordering: the plane centre tracks best, so panels
+        // added/removed one at a time grow and shrink from the middle.
+        return out.sortedBy { it.x * it.x + it.z * it.z }.take(max)
     }
 }

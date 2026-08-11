@@ -46,6 +46,9 @@ class EnrichedScanResult {
   // ── Brands ─────────────────────────────────────────────────────────────────
   final List<BrandRecommendation> brandRecommendations;
 
+  // ── Metadata ─────────────────────────────────────────────────────────────────
+  final bool? isManualEntry;
+
   const EnrichedScanResult({
     required this.totalAreaM2,
     required this.usableAreaM2,
@@ -72,6 +75,7 @@ class EnrichedScanResult {
     required this.statePortal,
     required this.stateNotes,
     required this.brandRecommendations,
+    this.isManualEntry,
   });
 
   double get obstacleAreaM2 => obstacleSummary.obstacleAreaM2;
@@ -103,32 +107,34 @@ class EnrichedScanResult {
     String? statePortal,
     String? stateNotes,
     List<BrandRecommendation>? brandRecommendations,
+    bool? isManualEntry,
   }) =>
       EnrichedScanResult(
-        totalAreaM2: totalAreaM2 ?? this.totalAreaM2,
-        usableAreaM2: usableAreaM2 ?? this.usableAreaM2,
-        panelCount: panelCount ?? this.panelCount,
-        systemSizeKw: systemSizeKw ?? this.systemSizeKw,
-        peakSunHours: peakSunHours ?? this.peakSunHours,
-        pvgisFallback: pvgisFallback ?? this.pvgisFallback,
-        annualKwh: annualKwh ?? this.annualKwh,
-        annualKwhGross: annualKwhGross ?? this.annualKwhGross,
-        centralSubsidy: centralSubsidy ?? this.centralSubsidy,
-        stateSubsidy: stateSubsidy ?? this.stateSubsidy,
-        totalSubsidy: totalSubsidy ?? this.totalSubsidy,
-        estimatedCost: estimatedCost ?? this.estimatedCost,
-        netCost: netCost ?? this.netCost,
-        paybackYears: paybackYears ?? this.paybackYears,
-        annualSavingsInr: annualSavingsInr ?? this.annualSavingsInr,
-        obstacleSummary: obstacleSummary ?? this.obstacleSummary,
-        detectedObstacles: detectedObstacles ?? this.detectedObstacles,
-        lat: lat ?? this.lat,
-        lon: lon ?? this.lon,
-        headingDeg: headingDeg ?? this.headingDeg,
-        captureJpeg: captureJpeg ?? this.captureJpeg,
-        stateDisplayName: stateDisplayName ?? this.stateDisplayName,
-        statePortal: statePortal ?? this.statePortal,
-        stateNotes: stateNotes ?? this.stateNotes,
-        brandRecommendations: brandRecommendations ?? this.brandRecommendations,
+         totalAreaM2: totalAreaM2 ?? this.totalAreaM2,
+         usableAreaM2: usableAreaM2 ?? this.usableAreaM2,
+         panelCount: panelCount ?? this.panelCount,
+         systemSizeKw: systemSizeKw ?? this.systemSizeKw,
+         peakSunHours: peakSunHours ?? this.peakSunHours,
+         pvgisFallback: pvgisFallback ?? this.pvgisFallback,
+         annualKwh: annualKwh ?? this.annualKwh,
+         annualKwhGross: annualKwhGross ?? this.annualKwhGross,
+         centralSubsidy: centralSubsidy ?? this.centralSubsidy,
+         stateSubsidy: stateSubsidy ?? this.stateSubsidy,
+         totalSubsidy: totalSubsidy ?? this.totalSubsidy,
+         estimatedCost: estimatedCost ?? this.estimatedCost,
+         netCost: netCost ?? this.netCost,
+         paybackYears: paybackYears ?? this.paybackYears,
+         annualSavingsInr: annualSavingsInr ?? this.annualSavingsInr,
+         obstacleSummary: obstacleSummary ?? this.obstacleSummary,
+         detectedObstacles: detectedObstacles ?? this.detectedObstacles,
+         lat: lat ?? this.lat,
+         lon: lon ?? this.lon,
+         headingDeg: headingDeg ?? this.headingDeg,
+         captureJpeg: captureJpeg ?? this.captureJpeg,
+         stateDisplayName: stateDisplayName ?? this.stateDisplayName,
+         statePortal: statePortal ?? this.statePortal,
+          stateNotes: stateNotes ?? this.stateNotes,
+          brandRecommendations: brandRecommendations ?? this.brandRecommendations,
+          isManualEntry: isManualEntry ?? this.isManualEntry,
       );
 }

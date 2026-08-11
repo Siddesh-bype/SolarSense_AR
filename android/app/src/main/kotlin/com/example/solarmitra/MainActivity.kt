@@ -72,6 +72,19 @@ class MainActivity : FlutterFragmentActivity() {
                 val mgr = arManagerRef
                 try {
                     when (call.method) {
+                        "checkArAvailability" -> {
+                            val supported = try {
+                                when (com.google.ar.core.ArCoreApk.getInstance()
+                                    .checkAvailability(this)) {
+                                    com.google.ar.core.ArCoreApk.Availability.SUPPORTED_INSTALLED,
+                                    com.google.ar.core.ArCoreApk.Availability.SUPPORTED_APK_TOO_OLD,
+                                    com.google.ar.core.ArCoreApk.Availability.SUPPORTED_NOT_INSTALLED,
+                                    -> true
+                                    else -> false
+                                }
+                            } catch (_: Exception) { false }
+                            result.success(mapOf("supported" to supported))
+                        }
                         "addPanel"        -> { mgr?.addPanel();    result.success(null) }
                         "removePanel"     -> { mgr?.removePanel(); result.success(null) }
                         "resetScan"       -> { mgr?.resetScan();   result.success(null) }
@@ -91,6 +104,25 @@ class MainActivity : FlutterFragmentActivity() {
                             val height  = (call.argument<Double>("heightM") ?: 1.14).toFloat()
                             val layout  = call.argument<String>("layout")
                             mgr?.configurePanelFlex(width, height, layout)
+                            result.success(null)
+                        }
+                        "setPanelHeight" -> {
+                            val id        = call.argument<Int>("id") ?: -1
+                            val elevation = (call.argument<Double>("elevationM") ?: 0.45).toFloat()
+                            mgr?.setPanelHeight(id, elevation)
+                            result.success(null)
+                        }
+                        "setAllPanelHeight" -> {
+                            val elevation = (call.argument<Double>("elevationM") ?: 0.45).toFloat()
+                            mgr?.setAllPanelHeight(elevation)
+                            result.success(null)
+                        }
+                        "autoFillMixed" -> { mgr?.autoFillMixed(); result.success(null) }
+                        "applyObstacles" -> {
+                            @Suppress("UNCHECKED_CAST")
+                            val boxes = call.argument<List<Map<String, Any>>>("boxes")
+                                ?: emptyList()
+                            mgr?.applyObstacles(boxes)
                             result.success(null)
                         }
                         "openAppSettings" -> {

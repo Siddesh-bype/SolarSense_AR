@@ -55,8 +55,11 @@ flutter {
 }
 
 dependencies {
-    // ARSceneView 2.x — Kotlin-first SceneView/ARCore wrapper (successor to Gorisse Sceneform)
-    implementation("io.github.sceneview:arsceneview:2.2.1")
+    // ARCore only. The app drives ARCore directly through its own GLSurfaceView
+    // renderer (see ARRenderer.kt) — SceneView/Filament is deliberately NOT a
+    // dependency: it is JNI-heavy, unused here, and its classes were being
+    // stripped by R8 in release builds.
+    implementation("com.google.ar:core:1.45.0")
     // AndroidX core for ContextCompat, lifecycle
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

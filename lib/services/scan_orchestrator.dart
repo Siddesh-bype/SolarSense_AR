@@ -81,7 +81,7 @@ class ScanOrchestrator {
         .clamp(0.0, usableAreaM2);
     final maxPanelsByArea = (effectiveUsable / _kPanelAreaM2).floor();
     final cappedPanels = maxPanelsByArea < panelCount ? maxPanelsByArea : panelCount;
-    final effectiveKw = cappedPanels * 0.54;
+    final effectiveKw = systemKw > 0 ? systemKw : (cappedPanels * 0.54);
 
     // ── Annual generation (gross → net of shading loss) ───────────────────────
     final annualKwhGross = effectiveKw * irradiance.annualKwhPerKw;
