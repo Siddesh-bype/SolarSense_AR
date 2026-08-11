@@ -62,6 +62,14 @@ report — **100 % on-device, no account or server needed.**
   <img src="https://raw.githubusercontent.com/Siddesh-bype/SolarSense_AR/main/docs/solarsense-flow.svg" alt="SolarSense product workflow: camera + motion → ARCore plane + depth → YOLOv8n obstacle AI → usable-area engine → PVGIS × PM Surya Ghar subsidies → 16-page PDF report" width="760" />
 </p>
 
+<div align="center">
+
+<a href="https://github.com/Siddesh-bype/SolarSense_AR">
+  <img alt="Animated SolarSense product flow" src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=18&pause=2000&color=0891B2&center=true&vCenter=true&width=760&lines=On-device+rooftop+solar+assessment;ARCore+plane+%2B+depth+mapping;YOLOv8n+obstacle+AI+(AC+tanks,+water+tanks);Usable-area+engine+deducts+shaded+footprint;PVGIS+irradiance+%2B+PM+Surya+Ghar+subsidies;Mixed-size+panel+packing+with+mounting+structure;16-page+PDF+report+in+under+2+minutes" />
+</a>
+
+</div>
+
 ```text
 Camera feed + motion
         |
